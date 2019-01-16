@@ -18,14 +18,15 @@ import os
 import socket
 import subprocess
 
-from charms import layer
+from pathlib import Path
+
 from charms.reactive import when, when_any, when_not
 from charms.reactive import set_state, remove_state
 from charms.reactive import hook
+from charms.reactive import clear_flag, endpoint_from_flag
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.contrib.charmsupport import nrpe
-from charms.reactive.helpers import data_changed
 
 from charms.layer import nginx
 from charms.layer import tls_client
@@ -56,11 +57,16 @@ apilb_nginx = """/var/log/nginx.*.log {
     endscript
 }"""
 
+cert_dir = Path('/srv/kubernetes/')
+server_crt_path = cert_dir / 'server.crt'
+server_key_path = cert_dir / 'server.key'
+
 
 @when('certificates.available', 'website.available')
-def request_server_certificates(tls, website):
+def request_server_certificates():
     '''Send the data that is required to create a server certificate for
     this server.'''
+    website = endpoint_from_flag('website.available')
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
     # Create SANs that the tls layer will add to the server cert.
@@ -73,10 +79,10 @@ def request_server_certificates(tls, website):
     extra_sans = hookenv.config('extra_sans')
     if extra_sans and not extra_sans == "":
         sans.extend(extra_sans.split())
-    # Create a path safe name by removing path characters from the unit name.
-    certificate_name = hookenv.local_unit().replace('/', '_')
     # Request a server cert with this information.
-    tls.request_server_cert(common_name, sans, certificate_name)
+    tls_client.request_server_cert(common_name, sans,
+                                   crt_path=server_crt_path,
+                                   key_path=server_key_path)
 
 
 @when('config.changed.extra_sans', 'certificates.available',
@@ -85,19 +91,16 @@ def update_certificate(tls, website):
     # Using the config.changed.extra_sans flag to catch changes.
     # IP changes will take ~5 minutes or so to propagate, but
     # it will update.
-    request_server_certificates(tls, website)
+    request_server_certificates()
 
 
 @when('certificates.server.cert.available',
-      'nginx.available', 'tls_client.server.certificate.written')
+      'nginx.available', 'tls_client.certs.changed')
 def kick_nginx(tls):
-    # we are just going to sighup it, but still want to avoid kicking it
-    # without need
-    if data_changed('cert', tls.get_server_cert()):
-        # certificate changed, so sighup nginx
-        hookenv.log("Certificate information changed, sending SIGHUP to nginx")
-        host.service_restart('nginx')
-    tls_client.reset_certificate_write_flag('server')
+    # certificate changed, so sighup nginx
+    hookenv.log("Certificate information changed, sending SIGHUP to nginx")
+    host.service_restart('nginx')
+    clear_flag('tls_client.certs.changed')
 
 
 @when('config.changed.port')
@@ -121,23 +124,18 @@ def maybe_write_apilb_logrotate_config():
 
 
 @when('nginx.available', 'apiserver.available',
-      'certificates.server.cert.available')
-def install_load_balancer(apiserver, tls):
+      'tls_client.certs.saved')
+def install_load_balancer():
     ''' Create the default vhost template for load balancing '''
-    # Get the tls paths from the layer data.
-    layer_options = layer.options('tls-client')
-    server_cert_path = layer_options.get('server_certificate_path')
-    cert_exists = server_cert_path and os.path.isfile(server_cert_path)
-    server_key_path = layer_options.get('server_key_path')
-    key_exists = server_key_path and os.path.isfile(server_key_path)
+    apiserver = endpoint_from_flag('apiserver.available')
     # Do both the key and certificate exist?
-    if cert_exists and key_exists:
+    if server_crt_path.exists() and server_key_path.exists():
         # At this point the cert and key exist, and they are owned by root.
-        chown = ['chown', 'www-data:www-data', server_cert_path]
+        chown = ['chown', 'www-data:www-data', str(server_crt_path)]
 
         # Change the owner to www-data so the nginx process can read the cert.
         subprocess.call(chown)
-        chown = ['chown', 'www-data:www-data', server_key_path]
+        chown = ['chown', 'www-data:www-data', str(server_key_path)]
 
         # Change the owner to www-data so the nginx process can read the key.
         subprocess.call(chown)
@@ -151,8 +149,8 @@ def install_load_balancer(apiserver, tls):
                 server_name='_',
                 services=services,
                 port=port,
-                server_certificate=server_cert_path,
-                server_key=server_key_path,
+                server_certificate=str(server_crt_path),
+                server_key=str(server_key_path),
                 proxy_read_timeout=hookenv.config('proxy_read_timeout')
         )
 
@@ -162,6 +160,7 @@ def install_load_balancer(apiserver, tls):
 
 @hook('upgrade-charm')
 def upgrade_charm():
+    request_server_certificates()
     maybe_write_apilb_logrotate_config()
 
 
