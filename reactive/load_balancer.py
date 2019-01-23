@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 
 from charms.reactive import when, when_any, when_not
-from charms.reactive import set_state, remove_state
+from charms.reactive import set_state, remove_state, is_state
 from charms.reactive import hook
 from charms.reactive import clear_flag, endpoint_from_flag
 from charmhelpers.core import hookenv
@@ -160,7 +160,8 @@ def install_load_balancer():
 
 @hook('upgrade-charm')
 def upgrade_charm():
-    request_server_certificates()
+    if is_state('certificates.available') and is_state('website.available'):
+        request_server_certificates()
     maybe_write_apilb_logrotate_config()
 
 
