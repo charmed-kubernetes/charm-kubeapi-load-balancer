@@ -5,6 +5,7 @@ includes:
   - 'layer:nginx'
   - 'layer:tls-client'
   - 'layer:kubernetes-common'
+  - 'layer:hacluster'
   - 'interface:public-address'
 options:
   tls-client:
