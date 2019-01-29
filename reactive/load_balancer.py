@@ -276,12 +276,12 @@ def remove_nrpe_config(nagios=None):
 
 @when('nginx.available', 'ha.connected')
 def configure_hacluster():
-    add_service_to_hacluster('nginx', 'nginx.service')
+    add_service_to_hacluster('nginx', 'nginx')
     set_flag('hacluster-configured')
 
 
 @when_not('ha.connected')
 @when('hacluster-configured')
 def remove_hacluster():
-    remove_service_from_hacluster('nginx', 'nginx.service')
+    remove_service_from_hacluster('nginx', 'nginx')
     clear_flag('hacluster-configured')
