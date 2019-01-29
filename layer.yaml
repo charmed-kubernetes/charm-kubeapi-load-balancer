@@ -4,7 +4,6 @@ includes:
   - 'layer:nagios'
   - 'layer:nginx'
   - 'layer:tls-client'
-  - 'layer:kubernetes-common'
   - 'interface:public-address'
 options:
   tls-client:
