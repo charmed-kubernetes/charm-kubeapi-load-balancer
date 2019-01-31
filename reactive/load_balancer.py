@@ -30,6 +30,7 @@ from charmhelpers.contrib.charmsupport import nrpe
 
 from charms.layer import nginx
 from charms.layer import tls_client
+from charms.layer.kubernetes_common import get_ingress_address
 
 from subprocess import Popen
 from subprocess import PIPE
@@ -232,18 +233,3 @@ def remove_nrpe_config(nagios=None):
 
     for service in services:
         nrpe_setup.remove_check(shortname=service)
-
-
-def get_ingress_address(endpoint_name):
-    try:
-        network_info = hookenv.network_get(endpoint_name)
-    except NotImplementedError:
-        network_info = []
-
-    if network_info and 'ingress-addresses' in network_info:
-        # just grab the first one for now, maybe be more robust here?
-        return network_info['ingress-addresses'][0]
-    else:
-        # if they don't have ingress-addresses they are running a juju that
-        # doesn't support spaces, so just return the private address
-        return hookenv.unit_get('private-address')
