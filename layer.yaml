@@ -10,3 +10,5 @@ includes:
 options:
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
+  hacluster:
+    binding_address: 'website'
