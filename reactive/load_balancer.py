@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 
 from charms.reactive import when, when_any, when_not
-from charms.reactive import set_state, remove_state, is_state
+from charms.reactive import set_flag, is_state
 from charms.reactive import hook
 from charms.reactive import clear_flag, endpoint_from_flag
 from charmhelpers.core import hookenv
@@ -31,6 +31,8 @@ from charmhelpers.contrib.charmsupport import nrpe
 from charms.layer import nginx
 from charms.layer import tls_client
 from charms.layer.kubernetes_common import get_ingress_address
+from charms.layer.hacluster import add_service_to_hacluster
+from charms.layer.hacluster import remove_service_from_hacluster
 
 from subprocess import Popen
 from subprocess import PIPE
@@ -75,6 +77,15 @@ def request_server_certificates():
         get_ingress_address(website.endpoint_name),
         socket.gethostname(),
     ]
+    hacluster = endpoint_from_flag('ha.connected')
+    if hacluster:
+        vips = hookenv.config('ha-cluster-vip').split()
+        dns_record = hookenv.config('ha-cluster-dns')
+        if vips:
+            sans.extend(vips)
+        else:
+            sans.append(dns_record)
+
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
     if extra_sans and not extra_sans == "":
@@ -87,7 +98,7 @@ def request_server_certificates():
 
 @when('config.changed.extra_sans', 'certificates.available',
       'website.available')
-def update_certificate(tls, website):
+def update_certificate():
     # Using the config.changed.extra_sans flag to catch changes.
     # IP changes will take ~5 minutes or so to propagate, but
     # it will update.
@@ -182,25 +193,53 @@ def set_nginx_version():
 
 
 @when('website.available')
-def provide_application_details(website):
+def provide_application_details():
     ''' re-use the nginx layer website relation to relay the hostname/port
     to any consuming kubernetes-workers, or other units that require the
     kubernetes API '''
-    website.configure(port=hookenv.config('port'))
+    website = endpoint_from_flag('website.available')
+    hacluster = endpoint_from_flag('ha.connected')
+    if hacluster:
+        # in the hacluster world, we dump the vip or the dns
+        # on every unit's data. This is because the
+        # kubernetes-master charm just grabs the first
+        # one it sees and uses that ip/dns.
+        vips = hookenv.config('ha-cluster-vip').split()
+        dns_record = hookenv.config('ha-cluster-dns')
+        if vips:
+            website.configure(hookenv.config('port'), vips, vips)
+        else:
+            website.configure(hookenv.config('port'), dns_record, dns_record)
+    else:
+        website.configure(port=hookenv.config('port'))
 
 
 @when('loadbalancer.available')
-def provide_loadbalancing(loadbalancer):
+def provide_loadbalancing():
     '''Send the public address and port to the public-address interface, so
     the subordinates can get the public address of this loadbalancer.'''
-    loadbalancer.set_address_port(hookenv.unit_get('public-address'),
-                                  hookenv.config('port'))
+    loadbalancer = endpoint_from_flag('loadbalancer.available')
+    hacluster = endpoint_from_flag('ha.connected')
+    if hacluster:
+        # in the hacluster world, we dump the vip or the dns
+        # on every unit's data. This is because the
+        # kubernetes-master charm just grabs the first
+        # one it sees and uses that ip/dns.
+        vips = hookenv.config('ha-cluster-vip').split()
+        dns_record = hookenv.config('ha-cluster-dns')
+        if vips:
+            address = vips
+        else:
+            address = dns_record
+    else:
+        address = hookenv.unit_get('public-address')
+    loadbalancer.set_address_port(address, hookenv.config('port'))
 
 
 @when('nrpe-external-master.available')
 @when_not('nrpe-external-master.initial-config')
 def initial_nrpe_config(nagios=None):
-    set_state('nrpe-external-master.initial-config')
+    set_flag('nrpe-external-master.initial-config')
     update_nrpe_config(nagios)
 
 
@@ -221,7 +260,7 @@ def update_nrpe_config(unused=None):
 @when_not('nrpe-external-master.available')
 @when('nrpe-external-master.initial-config')
 def remove_nrpe_config(nagios=None):
-    remove_state('nrpe-external-master.initial-config')
+    clear_flag('nrpe-external-master.initial-config')
 
     # List of systemd services for which the checks will be removed
     services = ('nginx',)
@@ -233,3 +272,16 @@ def remove_nrpe_config(nagios=None):
 
     for service in services:
         nrpe_setup.remove_check(shortname=service)
+
+
+@when('nginx.available', 'ha.connected')
+def configure_hacluster():
+    add_service_to_hacluster('nginx', 'nginx')
+    set_flag('hacluster-configured')
+
+
+@when_not('ha.connected')
+@when('hacluster-configured')
+def remove_hacluster():
+    remove_service_from_hacluster('nginx', 'nginx')
+    clear_flag('hacluster-configured')

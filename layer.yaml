@@ -5,7 +5,10 @@ includes:
   - 'layer:nginx'
   - 'layer:tls-client'
   - 'layer:kubernetes-common'
+  - 'layer:hacluster'
   - 'interface:public-address'
 options:
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
+  hacluster:
+    binding_address: 'website'
