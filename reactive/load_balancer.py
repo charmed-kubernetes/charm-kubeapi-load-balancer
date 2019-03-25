@@ -83,7 +83,7 @@ def request_server_certificates():
         dns_record = hookenv.config('ha-cluster-dns')
         if vips:
             sans.extend(vips)
-        else:
+        elif dns_record:
             sans.append(dns_record)
 
     # maybe they have extra names they want as SANs
@@ -208,8 +208,10 @@ def provide_application_details():
         dns_record = hookenv.config('ha-cluster-dns')
         if vips:
             website.configure(hookenv.config('port'), vips, vips)
-        else:
+        elif dns_record:
             website.configure(hookenv.config('port'), dns_record, dns_record)
+        else:
+            website.configure(port=hookenv.config('port'))
     else:
         website.configure(port=hookenv.config('port'))
 
@@ -229,8 +231,10 @@ def provide_loadbalancing():
         dns_record = hookenv.config('ha-cluster-dns')
         if vips:
             address = vips
-        else:
+        elif dns_record:
             address = dns_record
+        else:
+            address = hookenv.unit_get('public-address')
     else:
         address = hookenv.unit_get('public-address')
     loadbalancer.set_address_port(address, hookenv.config('port'))
