@@ -13,3 +13,12 @@ options:
     type: int
     default: 600
     description: Timeout in seconds for reading a response from proxy server.
+  loadbalancer-ips:
+    type: string
+    description: |
+      Space seperated list of IP addresses of loadbalancers in front of control plane.
+      A common case for this is virtual IP addresses that are floated in front of the
+      kubeapi-load-balancer charm. The workers will alternate IP addresses from this
+      list to distribute load. If you have 2 IPs and 4 workers, each IP will be used
+      by 2 workers.
+    default: ""

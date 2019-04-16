@@ -77,14 +77,18 @@ def request_server_certificates():
         get_ingress_address(website.endpoint_name),
         socket.gethostname(),
     ]
-    hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            sans.extend(vips)
-        elif dns_record:
-            sans.append(dns_record)
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        sans.extend(forced_lb_ips)
+    else:
+        hacluster = endpoint_from_flag('ha.connected')
+        if hacluster:
+            vips = hookenv.config('ha-cluster-vip').split()
+            dns_record = hookenv.config('ha-cluster-dns')
+            if vips:
+                sans.extend(vips)
+            elif dns_record:
+                sans.append(dns_record)
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
@@ -199,7 +203,11 @@ def provide_application_details():
     kubernetes API '''
     website = endpoint_from_flag('website.available')
     hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    address = None
+    if forced_lb_ips:
+        address = forced_lb_ips
+    elif hacluster:
         # in the hacluster world, we dump the vip or the dns
         # on every unit's data. This is because the
         # kubernetes-master charm just grabs the first
@@ -207,11 +215,13 @@ def provide_application_details():
         vips = hookenv.config('ha-cluster-vip').split()
         dns_record = hookenv.config('ha-cluster-dns')
         if vips:
-            website.configure(hookenv.config('port'), vips, vips)
+            address = vips
         elif dns_record:
-            website.configure(hookenv.config('port'), dns_record, dns_record)
-        else:
-            website.configure(port=hookenv.config('port'))
+            address = dns_record
+    if address:
+        website.configure(port=hookenv.config('port'),
+                          private_address=address,
+                          hostname=address)
     else:
         website.configure(port=hookenv.config('port'))
 
@@ -222,7 +232,10 @@ def provide_loadbalancing():
     the subordinates can get the public address of this loadbalancer.'''
     loadbalancer = endpoint_from_flag('loadbalancer.available')
     hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips
+    elif hacluster:
         # in the hacluster world, we dump the vip or the dns
         # on every unit's data. This is because the
         # kubernetes-master charm just grabs the first
