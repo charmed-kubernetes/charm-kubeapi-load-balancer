@@ -110,12 +110,15 @@ def update_certificate():
 
 
 @when('certificates.server.cert.available',
-      'nginx.available', 'tls_client.certs.changed')
+      'nginx.available')
+@when_any('tls_client.certs.changed',
+          'tls_client.ca.written')
 def kick_nginx(tls):
     # certificate changed, so sighup nginx
     hookenv.log("Certificate information changed, sending SIGHUP to nginx")
     host.service_restart('nginx')
     clear_flag('tls_client.certs.changed')
+    clear_flag('tls_client.ca.written')
 
 
 @when('config.changed.port')
