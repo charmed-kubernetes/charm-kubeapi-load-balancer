@@ -76,6 +76,7 @@ def request_server_certificates():
         hookenv.unit_public_ip(),
         get_ingress_address(website.endpoint_name),
         socket.gethostname(),
+        socket.getfqdn(),
     ]
     forced_lb_ips = hookenv.config('loadbalancer-ips').split()
     if forced_lb_ips:
