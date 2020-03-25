@@ -13,8 +13,9 @@ tags:
   - misc
 subordinate: false
 series:
-  - xenial
   - bionic
+  - xenial
+  - focal
 requires:
   apiserver:
     interface: http
