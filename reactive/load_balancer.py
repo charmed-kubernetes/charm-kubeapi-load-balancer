@@ -144,6 +144,7 @@ def maybe_write_apilb_logrotate_config():
 
 @when('nginx.available', 'apiserver.available',
       'tls_client.certs.saved')
+@when_not('upgrade.series.in-progress')
 def install_load_balancer():
     ''' Create the default vhost template for load balancing '''
     apiserver = endpoint_from_flag('apiserver.available')
@@ -182,6 +183,17 @@ def upgrade_charm():
     if is_state('certificates.available') and is_state('website.available'):
         request_server_certificates()
     maybe_write_apilb_logrotate_config()
+
+
+@hook('pre-series-upgrade')
+def pre_series_upgrade():
+    host.service_pause('nginx')
+    hookenv.status_set('blocked', 'Series upgrade in progress')
+
+
+@hook('post-series-upgrade')
+def post_series_upgrade():
+    host.service_resume('nginx')
 
 
 @when('nginx.available')
