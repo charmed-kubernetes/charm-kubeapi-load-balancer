@@ -30,6 +30,7 @@ from charmhelpers.contrib.charmsupport import nrpe
 
 from charms.layer import nginx
 from charms.layer import tls_client
+from charms.layer import status
 from charms.layer.kubernetes_common import get_ingress_address
 from charms.layer.hacluster import add_service_to_hacluster
 from charms.layer.hacluster import remove_service_from_hacluster
@@ -175,7 +176,7 @@ def install_load_balancer():
         )
 
         maybe_write_apilb_logrotate_config()
-        hookenv.status_set('active', 'Loadbalancer ready.')
+        status.active('Loadbalancer ready.')
 
 
 @hook('upgrade-charm')
@@ -188,7 +189,7 @@ def upgrade_charm():
 @hook('pre-series-upgrade')
 def pre_series_upgrade():
     host.service_pause('nginx')
-    hookenv.status_set('blocked', 'Series upgrade in progress')
+    status.blocked('Series upgrade in progress')
 
 
 @hook('post-series-upgrade')
