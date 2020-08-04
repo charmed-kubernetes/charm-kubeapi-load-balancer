@@ -31,7 +31,7 @@ from charmhelpers.contrib.charmsupport import nrpe
 from charms.layer import nginx
 from charms.layer import tls_client
 from charms.layer import status
-from charms.layer.kubernetes_common import get_ingress_address
+from charms.layer import kubernetes_common
 from charms.layer.hacluster import add_service_to_hacluster
 from charms.layer.hacluster import remove_service_from_hacluster
 
@@ -72,13 +72,18 @@ def request_server_certificates():
     website = endpoint_from_flag('website.available')
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
+
+    bind_ips = kubernetes_common.get_bind_addrs(ipv4=True, ipv6=True)
+
     # Create SANs that the tls layer will add to the server cert.
     sans = [
-        hookenv.unit_public_ip(),
-        get_ingress_address(website.endpoint_name),
+        # The CN field is checked as a hostname, so if it's an IP, it
+        # won't match unless also included in the SANs as an IP field.
+        common_name,
+        kubernetes_common.get_ingress_address(website.endpoint_name),
         socket.gethostname(),
         socket.getfqdn(),
-    ]
+    ] + bind_ips
     forced_lb_ips = hookenv.config('loadbalancer-ips').split()
     if forced_lb_ips:
         sans.extend(forced_lb_ips)
@@ -97,7 +102,7 @@ def request_server_certificates():
     if extra_sans and not extra_sans == "":
         sans.extend(extra_sans.split())
     # Request a server cert with this information.
-    tls_client.request_server_cert(common_name, sans,
+    tls_client.request_server_cert(common_name, sorted(set(sans)),
                                    crt_path=server_crt_path,
                                    key_path=server_key_path)
 
