@@ -13,7 +13,7 @@ tags:
   - misc
 subordinate: false
 series:
-    - focal
+  - focal
   - bionic
   - xenial
 requires:
