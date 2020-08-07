@@ -1,0 +1,19 @@
+#!/bin/bash
+set -x
+
+export PATH=/snap/bin:$PATH
+
+: "${CHARM_BUILD_DIR:=/tmp/charms}"
+
+charm whoami
+RET=$?
+if ((RET > 0)); then
+    echo "Not logged into charmstore"
+    exit 1
+fi
+
+URL=$(charm push "$CHARM_BUILD_DIR"/builds/"$CHARM"/. cs:~"$NAMESPACE"/"$CHARM" | yq r - url)
+
+if [ "$CHANNEL" != unpublished ]; then
+    charm release "$URL" --channel "$CHANNEL"
+fi
