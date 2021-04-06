@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import itertools
 import os
 import socket
 import subprocess
@@ -23,7 +24,7 @@ from pathlib import Path
 from charms.reactive import when, when_any, when_not
 from charms.reactive import set_flag, is_state
 from charms.reactive import hook
-from charms.reactive import clear_flag, endpoint_from_flag
+from charms.reactive import clear_flag, endpoint_from_flag, endpoint_from_name
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.contrib.charmsupport import nrpe
@@ -65,11 +66,10 @@ server_crt_path = cert_dir / 'server.crt'
 server_key_path = cert_dir / 'server.key'
 
 
-@when('certificates.available', 'website.available')
+@when('certificates.available')
 def request_server_certificates():
     '''Send the data that is required to create a server certificate for
     this server.'''
-    website = endpoint_from_flag('website.available')
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
 
@@ -80,7 +80,7 @@ def request_server_certificates():
         # The CN field is checked as a hostname, so if it's an IP, it
         # won't match unless also included in the SANs as an IP field.
         common_name,
-        kubernetes_common.get_ingress_address(website.endpoint_name),
+        kubernetes_common.get_ingress_address('website'),
         socket.gethostname(),
         socket.getfqdn(),
     ] + bind_ips
@@ -105,15 +105,6 @@ def request_server_certificates():
     tls_client.request_server_cert(common_name, sorted(set(sans)),
                                    crt_path=server_crt_path,
                                    key_path=server_key_path)
-
-
-@when('config.changed.extra_sans', 'certificates.available',
-      'website.available')
-def update_certificate():
-    # Using the config.changed.extra_sans flag to catch changes.
-    # IP changes will take ~5 minutes or so to propagate, but
-    # it will update.
-    request_server_certificates()
 
 
 @when('certificates.server.cert.available',
@@ -148,12 +139,15 @@ def maybe_write_apilb_logrotate_config():
             fp.write(apilb_nginx)
 
 
-@when('nginx.available', 'apiserver.available',
+@when('nginx.available',
       'tls_client.certs.saved')
+@when_any('endpoint.lb-consumers.requests_changed',
+          'apiserver.available')
 @when_not('upgrade.series.in-progress')
 def install_load_balancer():
     ''' Create the default vhost template for load balancing '''
     apiserver = endpoint_from_flag('apiserver.available')
+    lb_consumers = endpoint_from_name('lb-consumers')
     # Do both the key and certificate exist?
     if server_crt_path.exists() and server_key_path.exists():
         # At this point the cert and key exist, and they are owned by root.
@@ -168,7 +162,21 @@ def install_load_balancer():
 
         port = hookenv.config('port')
         hookenv.open_port(port)
-        services = apiserver.services()
+        services = []
+        if apiserver:
+            services.extend(apiserver.services())
+        for request in lb_consumers.all_requests:
+            services.append({
+                'hosts': [
+                    {
+                        'hostname': address,
+                        'port': port,
+                    }
+                    for address, port in itertools.product(
+                        request.backends, request.port_mapping.values()
+                    )
+                ],
+            })
         nginx.configure_site(
                 'apilb',
                 'apilb.conf',
@@ -218,41 +226,7 @@ def set_nginx_version():
     hookenv.application_version_set(version.rstrip())
 
 
-@when('website.available')
-def provide_application_details():
-    ''' re-use the nginx layer website relation to relay the hostname/port
-    to any consuming kubernetes-workers, or other units that require the
-    kubernetes API '''
-    website = endpoint_from_flag('website.available')
-    hacluster = endpoint_from_flag('ha.connected')
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    address = None
-    if forced_lb_ips:
-        address = forced_lb_ips
-    elif hacluster:
-        # in the hacluster world, we dump the vip or the dns
-        # on every unit's data. This is because the
-        # kubernetes-master charm just grabs the first
-        # one it sees and uses that ip/dns.
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            address = vips
-        elif dns_record:
-            address = dns_record
-    if address:
-        website.configure(port=hookenv.config('port'),
-                          private_address=address,
-                          hostname=address)
-    else:
-        website.configure(port=hookenv.config('port'))
-
-
-@when('loadbalancer.available')
-def provide_loadbalancing():
-    '''Send the public address and port to the public-address interface, so
-    the subordinates can get the public address of this loadbalancer.'''
-    loadbalancer = endpoint_from_flag('loadbalancer.available')
+def _get_lb_address():
     hacluster = endpoint_from_flag('ha.connected')
     forced_lb_ips = hookenv.config('loadbalancer-ips').split()
     if forced_lb_ips:
@@ -272,6 +246,42 @@ def provide_loadbalancing():
             address = hookenv.unit_get('public-address')
     else:
         address = hookenv.unit_get('public-address')
+    return address
+
+
+@when('endpoint.lb-consumers.joined',
+      'leadership.is_leader')
+def provide_lb_consumers():
+    '''Respond to any LB requests via the lb-consumers relation.
+
+    This is used in favor for the more complex two relation setup using the
+    website and loadbalancer relations going forward.
+    '''
+    lb_consumers = endpoint_from_name('lb-consumers')
+    address = _get_lb_address()
+    for request in lb_consumers.all_requests:
+        request.response.address = address
+        lb_consumers.send_response(request)
+
+
+@when('website.available')
+def provide_application_details():
+    ''' re-use the nginx layer website relation to relay the hostname/port
+    to any consuming kubernetes-workers, or other units that require the
+    kubernetes API '''
+    website = endpoint_from_flag('website.available')
+    address = _get_lb_address()
+    website.configure(port=hookenv.config('port'),
+                      private_address=address,
+                      hostname=address)
+
+
+@when('loadbalancer.available')
+def provide_loadbalancing():
+    '''Send the public address and port to the public-address interface, so
+    the subordinates can get the public address of this loadbalancer.'''
+    loadbalancer = endpoint_from_flag('loadbalancer.available')
+    address = _get_lb_address()
     loadbalancer.set_address_port(address, hookenv.config('port'))
 
 
