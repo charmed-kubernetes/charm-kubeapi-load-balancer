@@ -160,12 +160,12 @@ def install_load_balancer():
         # Change the owner to www-data so the nginx process can read the key.
         subprocess.call(chown)
 
-        port = hookenv.config('port')
-        hookenv.open_port(port)
+        listen_ports = {hookenv.config('port')}
         services = []
         if apiserver:
             services.extend(apiserver.services())
         for request in lb_consumers.all_requests:
+            listen_ports.update(request.port_mapping.keys())
             services.append({
                 'hosts': [
                     {
@@ -182,13 +182,15 @@ def install_load_balancer():
                 'apilb.conf',
                 server_name='_',
                 services=services,
-                port=port,
+                listen_ports=listen_ports,
                 server_certificate=str(server_crt_path),
                 server_key=str(server_key_path),
                 proxy_read_timeout=hookenv.config('proxy_read_timeout')
         )
 
         maybe_write_apilb_logrotate_config()
+        for port in listen_ports:
+            hookenv.open_port(port)
         status.active('Loadbalancer ready.')
 
 
@@ -229,6 +231,7 @@ def set_nginx_version():
 def _get_lb_address():
     hacluster = endpoint_from_flag('ha.connected')
     forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    address = None
     if forced_lb_ips:
         address = forced_lb_ips
     elif hacluster:
@@ -242,10 +245,6 @@ def _get_lb_address():
             address = vips
         elif dns_record:
             address = dns_record
-        else:
-            address = hookenv.unit_get('public-address')
-    else:
-        address = hookenv.unit_get('public-address')
     return address
 
 
@@ -258,9 +257,20 @@ def provide_lb_consumers():
     website and loadbalancer relations going forward.
     '''
     lb_consumers = endpoint_from_name('lb-consumers')
-    address = _get_lb_address()
+    lb_address = _get_lb_address()
+    if lb_address:
+        private_address = lb_address
+        public_address = lb_address
+    else:
+        rel_id = lb_consumers.relations[0].id
+        network_info = hookenv.network_get('lb-consumers', rel_id)
+        private_address = network_info['ingress-addresses'][0]
+        public_address = hookenv.unit_get('public-address')
     for request in lb_consumers.all_requests:
-        request.response.address = address
+        if request.public:
+            request.response.address = public_address
+        else:
+            request.response.address = private_address
         lb_consumers.send_response(request)
 
 
@@ -270,10 +280,13 @@ def provide_application_details():
     to any consuming kubernetes-workers, or other units that require the
     kubernetes API '''
     website = endpoint_from_flag('website.available')
-    address = _get_lb_address()
-    website.configure(port=hookenv.config('port'),
-                      private_address=address,
-                      hostname=address)
+    lb_address = _get_lb_address()
+    if lb_address:
+        website.configure(port=hookenv.config('port'),
+                          private_address=lb_address,
+                          hostname=lb_address)
+    else:
+        website.configure(port=hookenv.config('port'))
 
 
 @when('loadbalancer.available')
@@ -282,6 +295,8 @@ def provide_loadbalancing():
     the subordinates can get the public address of this loadbalancer.'''
     loadbalancer = endpoint_from_flag('loadbalancer.available')
     address = _get_lb_address()
+    if not address:
+        address = hookenv.unit_get('public-address')
     loadbalancer.set_address_port(address, hookenv.config('port'))
 
 
