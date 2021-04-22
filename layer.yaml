@@ -8,6 +8,7 @@ includes:
   - 'layer:hacluster'
   - 'interface:public-address'
   - 'layer:status'
+  - 'layer:leadership'
 options:
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'

@@ -22,3 +22,5 @@ requires:
 provides:
   loadbalancer:
       interface: public-address
+  lb-consumers:
+    interface: loadbalancer
