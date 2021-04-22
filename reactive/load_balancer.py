@@ -261,6 +261,16 @@ def provide_lb_consumers():
     lb_consumers = endpoint_from_name('lb-consumers')
     lb_address = _get_lb_address()
     for request in lb_consumers.all_requests:
+        response = request.response
+        if request.protocol not in (request.protocols.tcp,
+                                    request.protocols.http,
+                                    request.protocols.https):
+            response.error_type = response.error_types.unsupported
+            response.error_fields = {
+                'protocol': 'Protocol must be one of: tcp, http, https'
+            }
+            lb_consumers.send_response(request)
+            continue
         if lb_address:
             private_address = lb_address
             public_address = lb_address
@@ -270,9 +280,9 @@ def provide_lb_consumers():
             private_address = network_info['ingress-addresses'][0]
             public_address = hookenv.unit_get('public-address')
         if request.public:
-            request.response.address = public_address
+            response.address = public_address
         else:
-            request.response.address = private_address
+            response.address = private_address
         lb_consumers.send_response(request)
 
 
