@@ -141,57 +141,59 @@ def maybe_write_apilb_logrotate_config():
 
 @when('nginx.available',
       'tls_client.certs.saved')
-@when_any('endpoint.lb-consumers.requests_changed',
+@when_any('endpoint.lb-consumers.joined',
           'apiserver.available')
 @when_not('upgrade.series.in-progress')
 def install_load_balancer():
     ''' Create the default vhost template for load balancing '''
-    apiserver = endpoint_from_flag('apiserver.available')
+    apiserver = endpoint_from_name('apiserver')
     lb_consumers = endpoint_from_name('lb-consumers')
-    # Do both the key and certificate exist?
-    if server_crt_path.exists() and server_key_path.exists():
-        # At this point the cert and key exist, and they are owned by root.
-        chown = ['chown', 'www-data:www-data', str(server_crt_path)]
 
-        # Change the owner to www-data so the nginx process can read the cert.
-        subprocess.call(chown)
-        chown = ['chown', 'www-data:www-data', str(server_key_path)]
+    if not (server_crt_path.exists() and server_key_path.exists()):
+        hookenv.log('Skipping due to missing cert')
+        return
+    if not (apiserver.services() or lb_consumers.all_requests):
+        hookenv.log('Skipping due to requests not ready')
+        return
 
-        # Change the owner to www-data so the nginx process can read the key.
-        subprocess.call(chown)
+    # At this point the cert and key exist, and they are owned by root.
+    chown = ['chown', 'www-data:www-data', str(server_crt_path)]
 
-        listen_ports = {hookenv.config('port')}
-        services = []
-        if apiserver:
-            services.extend(apiserver.services())
-        for request in lb_consumers.all_requests:
-            listen_ports.update(request.port_mapping.keys())
-            services.append({
-                'hosts': [
-                    {
-                        'hostname': address,
-                        'port': port,
-                    }
-                    for address, port in itertools.product(
-                        request.backends, request.port_mapping.values()
-                    )
-                ],
-            })
-        nginx.configure_site(
-                'apilb',
-                'apilb.conf',
-                server_name='_',
-                services=services,
-                listen_ports=listen_ports,
-                server_certificate=str(server_crt_path),
-                server_key=str(server_key_path),
-                proxy_read_timeout=hookenv.config('proxy_read_timeout')
-        )
+    # Change the owner to www-data so the nginx process can read the cert.
+    subprocess.call(chown)
+    chown = ['chown', 'www-data:www-data', str(server_key_path)]
 
-        maybe_write_apilb_logrotate_config()
-        for port in listen_ports:
-            hookenv.open_port(port)
-        status.active('Loadbalancer ready.')
+    # Change the owner to www-data so the nginx process can read the key.
+    subprocess.call(chown)
+
+    servers = {}
+    if apiserver and apiserver.services():
+        servers[hookenv.config('port')] = {
+            (h['hostname'], h['port'])
+            for h in apiserver.services()['hosts']
+        }
+    for request in lb_consumers.all_requests:
+        for server_port in request.port_mapping.keys():
+            service = servers.setdefault(server_port, set())
+            service.update(
+                (backend, backend_port)
+                for backend, backend_port in itertools.product(
+                    request.backends, request.port_mapping.values()
+                )
+            )
+    nginx.configure_site(
+            'apilb',
+            'apilb.conf',
+            servers=servers,
+            server_certificate=str(server_crt_path),
+            server_key=str(server_key_path),
+            proxy_read_timeout=hookenv.config('proxy_read_timeout')
+    )
+
+    maybe_write_apilb_logrotate_config()
+    for listen_port in servers.keys():
+        hookenv.open_port(listen_port)
+    status.active('Loadbalancer ready.')
 
 
 @hook('upgrade-charm')
@@ -258,15 +260,15 @@ def provide_lb_consumers():
     '''
     lb_consumers = endpoint_from_name('lb-consumers')
     lb_address = _get_lb_address()
-    if lb_address:
-        private_address = lb_address
-        public_address = lb_address
-    else:
-        rel_id = lb_consumers.relations[0].id
-        network_info = hookenv.network_get('lb-consumers', rel_id)
-        private_address = network_info['ingress-addresses'][0]
-        public_address = hookenv.unit_get('public-address')
     for request in lb_consumers.all_requests:
+        if lb_address:
+            private_address = lb_address
+            public_address = lb_address
+        else:
+            network_info = hookenv.network_get('lb-consumers',
+                                               str(request.relation.id))
+            private_address = network_info['ingress-addresses'][0]
+            public_address = hookenv.unit_get('public-address')
         if request.public:
             request.response.address = public_address
         else:
