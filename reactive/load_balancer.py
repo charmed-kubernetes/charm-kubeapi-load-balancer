@@ -170,7 +170,8 @@ def install_load_balancer():
     if apiserver and apiserver.services():
         servers[hookenv.config('port')] = {
             (h['hostname'], h['port'])
-            for h in apiserver.services()['hosts']
+            for service in apiserver.services()
+            for h in service['hosts']
         }
     for request in lb_consumers.all_requests:
         for server_port in request.port_mapping.keys():
