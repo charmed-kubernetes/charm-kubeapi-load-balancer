@@ -251,6 +251,20 @@ def _get_lb_address():
     return address
 
 
+def _get_lb_port(prefer_private=True):
+    lb_consumers = endpoint_from_name('lb-consumers')
+
+    # prefer a port from the newer, more explicit relations
+    public = filter(lambda r: r.public, lb_consumers.all_requests)
+    private = filter(lambda r: not r.public, lb_consumers.all_requests)
+    lb_reqs = (private, public) if prefer_private else (public, private)
+    for lb_req in itertools.chain(*lb_reqs):
+        return list(lb_req.port_mapping)[0]
+
+    # fall back to the config
+    return hookenv.config('port')
+
+
 @when('endpoint.lb-consumers.joined',
       'leadership.is_leader')
 def provide_lb_consumers():
@@ -294,12 +308,13 @@ def provide_application_details():
     kubernetes API '''
     website = endpoint_from_flag('website.available')
     lb_address = _get_lb_address()
+    lb_port = _get_lb_port(prefer_private=True)
     if lb_address:
-        website.configure(port=hookenv.config('port'),
+        website.configure(port=lb_port,
                           private_address=lb_address,
                           hostname=lb_address)
     else:
-        website.configure(port=hookenv.config('port'))
+        website.configure(port=lb_port)
 
 
 @when('loadbalancer.available')
@@ -308,9 +323,10 @@ def provide_loadbalancing():
     the subordinates can get the public address of this loadbalancer.'''
     loadbalancer = endpoint_from_flag('loadbalancer.available')
     address = _get_lb_address()
+    lb_port = _get_lb_port(prefer_private=False)
     if not address:
         address = hookenv.unit_get('public-address')
-    loadbalancer.set_address_port(address, hookenv.config('port'))
+    loadbalancer.set_address_port(address, lb_port)
 
 
 @when('nrpe-external-master.available')
