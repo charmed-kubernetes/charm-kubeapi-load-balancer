@@ -1,6 +1,6 @@
 # kubeapi-load-balancer
 
-Simple NGINX reverse proxy to lend a hand in HA kubernetes-master deployments.
+Simple NGINX reverse proxy to lend a hand in HA kubernetes-control-plane deployments.
 
 
 This charm is a component of Charmed Kubernetes. For full information,
