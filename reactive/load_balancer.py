@@ -240,7 +240,7 @@ def _get_lb_address():
     elif hacluster:
         # in the hacluster world, we dump the vip or the dns
         # on every unit's data. This is because the
-        # kubernetes-master charm just grabs the first
+        # kubernetes-control-plane charm just grabs the first
         # one it sees and uses that ip/dns.
         vips = hookenv.config('ha-cluster-vip').split()
         dns_record = hookenv.config('ha-cluster-dns')
