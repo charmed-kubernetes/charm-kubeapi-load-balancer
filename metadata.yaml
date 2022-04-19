@@ -9,6 +9,7 @@ maintainers:
   - Matthew Bruzek <mbruzek@ubuntu.com>
 description: |
   A round robin Nginx load balancer to distribute traffic for kubernetes apiservers.
+docs: https://discourse.charmhub.io/t/kubeapi-load-balancer-docs-index/6213
 tags:
   - misc
 subordinate: false
