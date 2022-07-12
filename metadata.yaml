@@ -14,8 +14,8 @@ tags:
   - misc
 subordinate: false
 series:
-  - jammy
   - focal
+  - jammy
   - bionic
   - xenial
 requires:
