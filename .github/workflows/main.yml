@@ -2,33 +2,28 @@ name: Test Suite
 on: [pull_request]
 
 jobs:
-  lint-unit-wheelhouse:
-    name: Lint, Unit, Wheelhouse
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: [3.6, 3.7, 3.8, 3.9]
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v2
-    - name: Setup Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python }}
-    - name: Install Dependencies
-      run: |
-        pip install tox
-        sudo snap install charm --classic
-    - name: Lint
-      run: tox -vve lint
-    - name: Unit Tests
-      run: tox -vve unit
-    - name: Validate Wheelhouse
-      run: tox -vve validate-wheelhouse
+  call-inclusive-naming-check:
+    name: Inclusive naming
+    uses: canonical-web-and-design/Inclusive-naming/.github/workflows/woke.yaml@main
+    with:
+      fail-on-error: "true"
+
+  validate-wheelhouse:
+    name: Validate Wheelhouse
+    uses: charmed-kubernetes/workflows/.github/workflows/validate-wheelhouse.yaml@main
+
+  lint-unit:
+    name: Lint Unit
+    uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@main
+
   integration-test:
     name: Integration test with VMWare
     runs-on: self-hosted
     timeout-minutes: 360
+    needs:
+      - call-inclusive-naming-check
+      - validate-wheelhouse
+      - lint-unit
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -42,6 +37,7 @@ jobs:
           provider: vsphere
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
-          bootstrap-options: "--model-default datastore=vsanDatastore --model-default primary-network=VLAN_2764"
+          bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
+          bootstrap-options: "${{ secrets.FOCAL_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2764"
       - name: Run test
         run: tox -e integration

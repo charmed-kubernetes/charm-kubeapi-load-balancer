@@ -15,8 +15,8 @@ tags:
 subordinate: false
 series:
   - focal
+  - jammy
   - bionic
-  - xenial
 requires:
   apiserver:
     interface: http
