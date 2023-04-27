@@ -66,6 +66,11 @@ server_crt_path = cert_dir / "server.crt"
 server_key_path = cert_dir / "server.key"
 
 
+def _nrpe_external(flagname:str):
+    # wokeignore:rule=master
+    return f"nrpe-external-master.{flagname}"
+
+
 @when("certificates.available")
 def request_server_certificates():
     """Send the data that is required to create a server certificate for
@@ -322,15 +327,15 @@ def provide_loadbalancing():
     loadbalancer.set_address_port(address, lb_port)
 
 
-@when("nrpe-external-master.available")
-@when_not("nrpe-external-master.initial-config")
+@when(_nrpe_external("available"))
+@when_not(_nrpe_external("initial-config"))
 def initial_nrpe_config(nagios=None):
-    set_flag("nrpe-external-master.initial-config")
+    set_flag(_nrpe_external("initial-config"))
     update_nrpe_config(nagios)
 
 
 @when("nginx.available")
-@when("nrpe-external-master.available")
+@when(_nrpe_external("available"))
 @when_any("config.changed.nagios_context", "config.changed.nagios_servicegroups")
 def update_nrpe_config(unused=None):
     services = ("nginx",)
@@ -342,15 +347,14 @@ def update_nrpe_config(unused=None):
     nrpe_setup.write()
 
 
-@when_not("nrpe-external-master.available")
-@when("nrpe-external-master.initial-config")
+@when_not(_nrpe_external("available"))
+@when(_nrpe_external("initial-config"))
 def remove_nrpe_config(nagios=None):
-    clear_flag("nrpe-external-master.initial-config")
+    clear_flag(_nrpe_external("initial-config"))
 
     # List of systemd services for which the checks will be removed
     services = ("nginx",)
 
-    # The current nrpe-external-master interface doesn't handle a lot of logic,
     # use the charm-helpers code for now.
     hostname = nrpe.get_nagios_hostname()
     nrpe_setup = nrpe.NRPE(hostname=hostname)
