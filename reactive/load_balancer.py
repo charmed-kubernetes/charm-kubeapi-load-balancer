@@ -66,7 +66,7 @@ server_crt_path = cert_dir / "server.crt"
 server_key_path = cert_dir / "server.key"
 
 
-def _nrpe_external(flagname:str):
+def _nrpe_external(flagname: str) -> str:
     # wokeignore:rule=master
     return f"nrpe-external-master.{flagname}"
 
