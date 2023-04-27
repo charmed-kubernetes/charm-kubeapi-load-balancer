@@ -46,6 +46,25 @@ async def test_build_and_deploy(ops_test):
     _check_status_messages(ops_test)
 
 
+async def test_load_balancer_forced_address(ops_test):
+    """Validate that the first forced address is passed in lb-consumers relation."""
+    api_lb = ops_test.model.applications["kubeapi-load-balancer"]
+    address = api_lb.units[0].data["public-address"]
+    await api_lb.set_config({"loadbalancer-ips": address})
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=10 * 60)
+
+    try:
+        worker = ops_test.model.applications["kubernetes-worker"]
+        action = await worker.units[0].run(
+            "cat /root/cdk/kubeproxyconfig | grep server"
+        )
+        result = await action.wait()
+        assert f"https://{address}" in result.results["stdout"]
+    finally:
+        await api_lb.reset_config(["loadbalancer-ips"])
+        await ops_test.model.wait_for_idle(wait_for_active=True, timeout=10 * 60)
+
+
 async def test_kube_api_endpoint(ops_test):
     """Validate that using the old MITM-style relation works"""
     k8s_cp = ops_test.model.applications["kubernetes-control-plane"]
