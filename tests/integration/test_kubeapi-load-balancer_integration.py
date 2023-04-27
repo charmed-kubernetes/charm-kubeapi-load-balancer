@@ -25,14 +25,14 @@ async def test_build_and_deploy(ops_test):
     if not charm:
         log.info("Build Charm...")
         charm = await ops_test.build_charm(".")
-    else:
-        (charm,) = copy_files([charm], ops_test.tmp_path / "charm")
 
     overlays = [
         ops_test.Bundle("kubernetes-core", channel="edge"),
         Path("tests/data/charm.yaml"),
     ]
-    bundle, *overlays = await ops_test.async_render_bundles(*overlays, charm=charm.resolve())
+    bundle, *overlays = await ops_test.async_render_bundles(
+        *overlays, charm=charm.resolve()
+    )
 
     log.info("Deploy Charm...")
     model = ops_test.model_full_name
