@@ -1,5 +1,5 @@
 description: A minimal two-machine Kubernetes cluster, appropriate for development.
-services:
+applications:
   kubeapi-load-balancer:
     charm: {{charm}}
     num_units: 1

@@ -41,4 +41,4 @@ jobs:
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
           bootstrap-options: "${{ secrets.JAMMY_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2764"
       - name: Run test
-        run: tox -e integration
+        run: tox -e integration -- --basetemp=/home/ubuntu/pytest
