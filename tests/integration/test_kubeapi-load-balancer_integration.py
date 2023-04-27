@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 def _check_status_messages(ops_test):
-    """ Validate that the status messages are correct. """
+    """Validate that the status messages are correct."""
     expected_messages = {
         "kubernetes-control-plane": "Kubernetes control-plane running.",
         "kubernetes-worker": "Kubernetes worker running.",
@@ -24,9 +24,7 @@ async def test_build_and_deploy(ops_test):
     charm = await ops_test.build_charm(".")
 
     log.info("Build Bundle...")
-    bundle = ops_test.render_bundle(
-        "tests/data/bundle.yaml", k8s_lb_charm=charm
-    )
+    bundle = ops_test.render_bundle("tests/data/bundle.yaml", k8s_lb_charm=charm)
 
     log.info("Deploy Bundle...")
     model = ops_test.model_full_name
@@ -38,7 +36,7 @@ async def test_build_and_deploy(ops_test):
 
 
 async def test_kube_api_endpoint(ops_test):
-    """ Validate that using the old MITM-style relation works"""
+    """Validate that using the old MITM-style relation works"""
     k8s_cp = ops_test.model.applications["kubernetes-control-plane"]
     worker = ops_test.model.applications["kubernetes-worker"]
     await k8s_cp.remove_relation("loadbalancer-internal", "kubeapi-load-balancer")
