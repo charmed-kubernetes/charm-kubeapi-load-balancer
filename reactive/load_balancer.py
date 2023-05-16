@@ -41,6 +41,8 @@ from subprocess import PIPE
 from subprocess import STDOUT
 from subprocess import CalledProcessError
 
+from typing import List
+
 
 apilb_nginx = """/var/log/nginx.*.log {
     daily
@@ -231,24 +233,24 @@ def set_nginx_version():
     hookenv.application_version_set(version.rstrip())
 
 
-def _get_lb_address():
-    hacluster = endpoint_from_flag("ha.connected")
+def _get_lb_addresses() -> List[str]:
     forced_lb_ips = hookenv.config("loadbalancer-ips").split()
-    address = None
     if forced_lb_ips:
-        address = forced_lb_ips
-    elif hacluster:
+        return forced_lb_ips
+
+    if endpoint_from_flag("ha.connected"):
         # in the hacluster world, we dump the vip or the dns
         # on every unit's data. This is because the
         # kubernetes-control-plane charm just grabs the first
         # one it sees and uses that ip/dns.
         vips = hookenv.config("ha-cluster-vip").split()
-        dns_record = hookenv.config("ha-cluster-dns")
         if vips:
-            address = vips
-        elif dns_record:
-            address = dns_record
-    return address
+            return vips
+
+        dns_records = hookenv.config("ha-cluster-dns").split()
+        if dns_records:
+            return dns_records
+    return []
 
 
 def _get_lb_port(prefer_private=True):
@@ -273,7 +275,7 @@ def provide_lb_consumers():
     website and loadbalancer relations going forward.
     """
     lb_consumers = endpoint_from_name("lb-consumers")
-    lb_address = _get_lb_address()
+    lb_addresses = _get_lb_addresses()
     for request in lb_consumers.all_requests:
         response = request.response
         if request.protocol not in (
@@ -287,9 +289,9 @@ def provide_lb_consumers():
             }
             lb_consumers.send_response(request)
             continue
-        if lb_address:
-            private_address = lb_address
-            public_address = lb_address
+        if lb_addresses:
+            private_address = lb_addresses[0]
+            public_address = lb_addresses[0]
         else:
             network_info = hookenv.network_get("lb-consumers", str(request.relation.id))
             private_address = network_info["ingress-addresses"][0]
@@ -307,10 +309,12 @@ def provide_application_details():
     to any consuming kubernetes-workers, or other units that require the
     kubernetes API"""
     website = endpoint_from_flag("website.available")
-    lb_address = _get_lb_address()
+    lb_addresses = _get_lb_addresses()
     lb_port = _get_lb_port(prefer_private=True)
-    if lb_address:
-        website.configure(port=lb_port, private_address=lb_address, hostname=lb_address)
+    if lb_addresses:
+        website.configure(
+            port=lb_port, private_address=lb_addresses[0], hostname=lb_addresses[0]
+        )
     else:
         website.configure(port=lb_port)
 
@@ -320,11 +324,11 @@ def provide_loadbalancing():
     """Send the public address and port to the public-address interface, so
     the subordinates can get the public address of this loadbalancer."""
     loadbalancer = endpoint_from_flag("loadbalancer.available")
-    address = _get_lb_address()
+    lb_addresses = _get_lb_addresses()
     lb_port = _get_lb_port(prefer_private=False)
-    if not address:
-        address = hookenv.unit_get("public-address")
-    loadbalancer.set_address_port(address, lb_port)
+    if not lb_addresses:
+        lb_addresses = [hookenv.unit_get("public-address")]
+    loadbalancer.set_address_port(lb_addresses[0], lb_port)
 
 
 @when(_nrpe_external("available"))
