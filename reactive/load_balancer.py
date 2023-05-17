@@ -147,6 +147,11 @@ def maybe_write_apilb_logrotate_config():
             fp.write(apilb_nginx)
 
 
+def allow_lb_consumers_to_read_requests():
+    lb_consumers = endpoint_from_name("lb-consumers")
+    lb_consumers.follower_perms(read=True)
+
+
 @when("nginx.available", "tls_client.certs.saved")
 @when_any("endpoint.lb-consumers.joined", "apiserver.available")
 @when_not("upgrade.series.in-progress")
@@ -208,6 +213,7 @@ def upgrade_charm():
     if is_state("certificates.available") and is_state("website.available"):
         request_server_certificates()
     maybe_write_apilb_logrotate_config()
+    allow_lb_consumers_to_read_requests()
 
 
 @hook("pre-series-upgrade")
