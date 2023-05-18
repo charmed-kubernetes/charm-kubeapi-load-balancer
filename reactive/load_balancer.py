@@ -150,6 +150,7 @@ def maybe_write_apilb_logrotate_config():
 def allow_lb_consumers_to_read_requests():
     lb_consumers = endpoint_from_name("lb-consumers")
     lb_consumers.follower_perms(read=True)
+    return lb_consumers
 
 
 @when("nginx.available", "tls_client.certs.saved")
@@ -158,7 +159,7 @@ def allow_lb_consumers_to_read_requests():
 def install_load_balancer():
     """Create the default vhost template for load balancing"""
     apiserver = endpoint_from_name("apiserver")
-    lb_consumers = endpoint_from_name("lb-consumers")
+    lb_consumers = allow_lb_consumers_to_read_requests()
 
     if not (server_crt_path.exists() and server_key_path.exists()):
         hookenv.log("Skipping due to missing cert")
@@ -213,7 +214,6 @@ def upgrade_charm():
     if is_state("certificates.available") and is_state("website.available"):
         request_server_certificates()
     maybe_write_apilb_logrotate_config()
-    allow_lb_consumers_to_read_requests()
 
 
 @hook("pre-series-upgrade")
