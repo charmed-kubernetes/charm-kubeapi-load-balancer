@@ -147,13 +147,19 @@ def maybe_write_apilb_logrotate_config():
             fp.write(apilb_nginx)
 
 
+def allow_lb_consumers_to_read_requests():
+    lb_consumers = endpoint_from_name("lb-consumers")
+    lb_consumers.follower_perms(read=True)
+    return lb_consumers
+
+
 @when("nginx.available", "tls_client.certs.saved")
 @when_any("endpoint.lb-consumers.joined", "apiserver.available")
 @when_not("upgrade.series.in-progress")
 def install_load_balancer():
     """Create the default vhost template for load balancing"""
     apiserver = endpoint_from_name("apiserver")
-    lb_consumers = endpoint_from_name("lb-consumers")
+    lb_consumers = allow_lb_consumers_to_read_requests()
 
     if not (server_crt_path.exists() and server_key_path.exists()):
         hookenv.log("Skipping due to missing cert")
