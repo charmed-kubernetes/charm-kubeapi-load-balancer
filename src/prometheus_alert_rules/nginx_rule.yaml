@@ -1,0 +1,12 @@
+groups:
+  - name: nginx_service_health
+    rules:
+      - alert: NginxServiceUnhealthy
+        expr: node_systemd_unit_state{name="nginx.service",state="active",type="forking"} != 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx service is unhealthy"
+          description: "The Nginx service unit is not in the expected healthy state."
+
