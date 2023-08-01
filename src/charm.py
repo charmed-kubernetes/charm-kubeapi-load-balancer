@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import charms.contextual_status as status
-from ops.model import BlockedStatus, WaitingStatus, MaintenanceStatus
 import ops
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.operator_libs_linux.v1.systemd import service_restart
@@ -29,7 +28,7 @@ from hacluster import HACluster
 from loadbalancer_interface import LBConsumers
 from nginx import NginxConfigurer
 from ops.interface_tls_certificates import CertificatesRequires
-from ops.model import Binding
+from ops.model import Binding, BlockedStatus, MaintenanceStatus, WaitingStatus
 
 log = logging.getLogger(__name__)
 
