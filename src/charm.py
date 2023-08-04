@@ -117,12 +117,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         for request in self.load_balancer.all_requests:
             for server_port in request.port_mapping.keys():
                 service: set = servers.setdefault(server_port, set())
-                service.update(
-                    (backend, backend_port)
-                    for backend, backend_port in itertools.product(
-                        request.backends, request.port_mapping.values()
-                    )
-                )
+                service.update(itertools.product(request.backends, request.port_mapping.values()))
         return servers
 
     def _get_bind_addresses(self, ipv4=True, ipv6=True):
@@ -135,19 +130,17 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         Returns:
             List[str]: A list of bind addresses available on the unit.
         """
-        process = subprocess.run(
+        result = subprocess.check_output(
             ["ip", "-j", "-br", "addr", "show", "scope", "global"],
-            capture_output=True,
             text=True,
             timeout=25,
-            check=True,
         )
         ignored_ifaces = ("lxdbr", "flannel", "cni", "virbr", "docker")
         accept_versions = {4} if ipv4 else set()
         accept_versions.add(6) if ipv6 else None
 
         addrs = []
-        for addr in json.loads(process.stdout.strip()):
+        for addr in json.loads(result.strip()):
             if addr["operstate"].upper() != "UP" or any(
                 addr["ifname"].startswith(prefix) for prefix in ignored_ifaces
             ):
@@ -160,24 +153,23 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
 
     def _get_lb_addresses(self) -> List[str]:
         """Return a list of load balancer addresses."""
-        forced_lb_ips = self.config.get("loadbalancer-ips").split()
-        if forced_lb_ips:
+        if forced_lb_ips := self.config.get("loadbalancer-ips").split():
             return forced_lb_ips
         if self.hacluster.is_ready:
-            vips = self.config.get("ha-cluster-vip").split()
-            if vips:
+            if vips := self.config.get("ha-cluster-vip").split():
                 return vips
-            dns_records = self.config.get("ha-cluster-dns").split()
-            if dns_records:
+            if dns_records := self.config.get("ha-cluster-dns").split():
                 return dns_records
         return []
 
     def _get_public_address(self):
         """Return the unit public-address."""
-        process = subprocess.run(
-            ["unit-get", "public-address"], capture_output=True, text=True, timeout=25, check=True
+        result = subprocess.check_output(
+            ["unit-get", "public-address"],
+            text=True,
+            timeout=25,
         )
-        return process.stdout.strip()
+        return result.strip()
 
     def _install_load_balancer(self):
         """Install and configure the load balancer."""
@@ -269,18 +261,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             *bind_ips,
         ]
 
-        forced_lb_ips = self.config.get("loadbalancer-ips").split()
-        if forced_lb_ips:
-            sans.extend(forced_lb_ips)
-        else:
-            if self.hacluster.is_ready:
-                vips = self.config.get("ha-cluster-vip").split()
-                dns_records = self.config.get("ha-cluster-dns").split()
-                if vips:
-                    sans.extend(vips)
-                elif dns_records:
-                    sans.extend(dns_records)
-
+        sans.extend(self._get_lb_addresses())
         extra_sans = self.config.get("extra_sans").split()
         if extra_sans:
             sans.extend(extra_sans)
