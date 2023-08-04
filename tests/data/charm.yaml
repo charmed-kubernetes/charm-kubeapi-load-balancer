@@ -1,8 +1,10 @@
 description: A minimal two-machine Kubernetes cluster, appropriate for development.
 applications:
-  kubernetes-control-plane:
-    options:
-      allow-privileged: "true"
   kubeapi-load-balancer:
-    channel: null
-    charm: {{kubeapilb_charm}}
+    charm: {{charm}}
+    num_units: 1
+    expose: true
+relations:
+- [kubeapi-load-balancer:lb-consumers, kubernetes-control-plane:loadbalancer-internal]
+- [kubeapi-load-balancer:lb-consumers, kubernetes-control-plane:loadbalancer-external]
+- [kubeapi-load-balancer:certificates, easyrsa:client]
