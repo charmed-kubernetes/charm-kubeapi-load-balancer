@@ -18,8 +18,10 @@ APP_NAME = METADATA["name"]
 @pytest.mark.abort_on_fail
 @pytest.mark.skip_if_deployed
 async def test_build_and_deploy(ops_test):
-    log.info("Building charm")
-    charm = await ops_test.build_charm(".")
+    charm = next(Path().glob("kubeapi*.charm"), None)
+    if not charm:
+        log.info("Build Charm...")
+        charm = await ops_test.build_charm(".")
 
     log.info("Build Bundle...")
     bundle, *overlays = await ops_test.async_render_bundles(
