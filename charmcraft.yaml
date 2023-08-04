@@ -6,14 +6,14 @@ bases:
   - build-on:
     - name: ubuntu
       channel: "20.04"
-      architecture: ["amd64"]
+      architectures: ["amd64"]
     run-on:
     - name: ubuntu
       channel: "20.04"
-      architecture: ["amd64", "arm64", "s390x"]
+      architectures: ["amd64", "arm64", "s390x"]
     - name: ubuntu
       channel: "22.04"
-      architecture: ["amd64", "arm64", "s390x"]
+      architectures: ["amd64", "arm64", "s390x"]
 parts:
   charm:
     build-packages: [git]
