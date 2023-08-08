@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, call, mock_open, patch
+from unittest.mock import MagicMock, call, patch
 
 from nginx import NginxConfigurer
 
@@ -13,29 +13,6 @@ class TestNginxConfigurer(unittest.TestCase):
         self.config = MagicMock()
         self.mock_apt = mock_apt
         self.nginx = NginxConfigurer(self.charm, self.config)
-
-    def test__get_app_path_default(self):
-        app_path = self.nginx._get_app_path()
-        self.assertEqual(app_path, "/srv/app")
-
-    def test__get_app_path_custom(self):
-        custom_app_path = "/srv/custom-app"
-        self.nginx._load_site = MagicMock(return_value={"app_path": custom_app_path})
-        app_path = self.nginx._get_app_path()
-        self.assertEqual(app_path, custom_app_path)
-
-    @patch("nginx.os.path.isfile", return_value=True)
-    def test__load_site(self, mock_isfile):
-        toml_content = """app_path = "/srv/custom-app"\nfoo = "bar" """
-
-        with patch("nginx.open", mock_open(read_data=toml_content)):
-            site_data = self.nginx._load_site()
-
-            expected_data = {"app_path": "/srv/custom-app", "foo": "bar"}
-
-            self.assertEqual(site_data, expected_data)
-
-        mock_isfile.assert_called_once_with("site.toml")
 
     def test__render_template(self):
         context = {"name": "CK"}

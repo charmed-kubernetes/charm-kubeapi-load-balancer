@@ -1,18 +1,13 @@
 """NGINX helper module."""
 
 import logging
-import os
 from pathlib import Path
 
 import charms.operator_libs_linux.v0.apt as apt
 import ops
-import toml
 from jinja2 import Template
 from ops.framework import Object
 from ops.model import MaintenanceStatus
-
-HOST = "127.0.0.1"
-PORT = "80"
 
 PACKAGE = "nginx-full"
 
@@ -29,19 +24,6 @@ class NginxConfigurer(Object):
         self.config = config
 
         self.framework.observe(self.charm.on.upgrade_charm, self._upgrade_nginx)
-
-    def _get_app_path(self):
-        site = self._load_site()
-        return site.get("app_path", "/srv/app")
-
-    def _load_site(self) -> dict:
-        config = {}
-        config_file = "site.toml"
-
-        if os.path.isfile(config_file):
-            with open(config_file, "r") as f:
-                config = toml.load(f)
-        return config
 
     def _render_template(self, template_file: Path, dest: Path, context: dict):
         with open(template_file) as f:
@@ -67,12 +49,10 @@ class NginxConfigurer(Object):
         """
         self.charm.unit.status = MaintenanceStatus(f"Configuring site {site}")
 
-        context = self._load_site()
-        context.update(**kwargs)
         conf_path = Path(f"/etc/nginx/sites-available/{site}")
         if conf_path.exists():
             conf_path.unlink()
-        self._render_template(template_file=template, dest=conf_path, context=context)
+        self._render_template(template_file=template, dest=conf_path, context=kwargs)
         symlink_path = Path(f"/etc/nginx/sites-enabled/{site}")
         if symlink_path.exists():
             symlink_path.unlink()
