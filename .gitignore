@@ -1,4 +1,7 @@
-.tox/
-__pycache__/
-*.pyc
+venv/
+build/
 *.charm
+.tox/
+.coverage
+__pycache__/
+*.py[cod]

@@ -1,24 +1,34 @@
 options:
-  port:
-    type: int
-    default: 443
-    description: The port to run the loadbalancer
   extra_sans:
     type: string
     default: ""
     description: |
-      Space-separated list of extra SAN entries to add to the x509 certificate
-      created for the load balancers.
+      A space-separated list of additional Subject Alternative Names (SAN) entries
+      to include in the x509 certificate created for the load balancers.
   proxy_read_timeout:
     type: int
     default: 600
-    description: Timeout in seconds for reading a response from proxy server.
+    description: The timeout in seconds for reading a response from proxy server.
   loadbalancer-ips:
     type: string
-    description: |
-      Space seperated list of IP addresses of loadbalancers in front of control plane.
-      A common case for this is virtual IP addresses that are floated in front of the
-      kubeapi-load-balancer charm. The workers will alternate IP addresses from this
-      list to distribute load. If you have 2 IPs and 4 workers, each IP will be used
-      by 2 workers.
     default: ""
+    description: |
+      A space-separated list of IP addresses of load balancers in front of the control plane.
+      A common use case for this is having virtual IP addresses floated in front of the
+      kubeapi-load-balancer charm. The workers will evenly distribute the load by alternating
+      between the IP addresses in this list. For example, if you have 2 IPs and 4 workers,
+      each IP will be used by 2 workers.
+  ha-cluster-dns:
+    type: string
+    default: ""
+    description: |
+      This option specifies the DNS entry to be used in conjunction with the HA Cluster 
+      subordinate charm. This option is mutually exclusive with the `ha-cluster-vip`
+      option.
+  ha-cluster-vip:
+    type: string
+    default: ""
+    description: |
+      A space-separated list of virtual IPs that the charm can utilize in conjunction with the
+      HA Cluster subordinate charm. This option is mutually exclusive with the `ha-cluster-dns`
+      option.

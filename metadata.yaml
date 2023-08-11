@@ -1,12 +1,9 @@
 name: kubeapi-load-balancer
 summary: Nginx Load Balancer
 maintainers:
-  - Tim Van Steenburgh <tim.van.steenburgh@canonical.com>
   - George Kraft <george.kraft@canonical.com>
-  - Rye Terrell <rye.terrell@canonical.com>
   - Konstantinos Tsakalozos <kos.tsakalozos@canonical.com>
-  - Charles Butler <Chuck@dasroot.net>
-  - Matthew Bruzek <mbruzek@ubuntu.com>
+  - Mateo Florido <mateo.florido@canonical.com>
 description: |
   A round robin Nginx load balancer to distribute traffic for kubernetes apiservers.
 docs: https://discourse.charmhub.io/t/kubeapi-load-balancer-docs-index/6213
@@ -19,8 +16,12 @@ series:
 requires:
   apiserver:
     interface: http
+  certificates:
+    interface: tls-certificates
+  ha:
+    interface: hacluster
 provides:
-  loadbalancer:
-      interface: public-address
   lb-consumers:
     interface: loadbalancer
+  cos-agent:
+    interface: cos_agent
