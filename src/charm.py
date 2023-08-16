@@ -78,6 +78,22 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         uid, gid = user.pw_uid, user.pw_gid
         os.chown(path=file_path, uid=uid, gid=gid)
 
+    def _check_certificates(self, event):
+        """Check the certificates relation status and updates the status accordingly.
+
+        Returns:
+            True if certificates relation is ready, False otherwise.
+        """
+        evaluation = self.certificates.evaluate_relation(event)
+        if evaluation:
+            log.info(f"Certificates evaluation: {evaluation}")
+            if "Waiting" in evaluation:
+                status.add(WaitingStatus(evaluation))
+            else:
+                status.add(BlockedStatus(evaluation))
+            return False
+        return True
+
     def _configure_hacluster(self):
         if self.hacluster.is_ready:
             status.add(MaintenanceStatus("Configuring HACluster"))
@@ -235,20 +251,17 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
                 response.address = private_address
             self.load_balancer.send_response(request)
 
-    def _reconcile(self, _):
-        self._request_server_certificates()
+    def _reconcile(self, event):
+        self._request_server_certificates(event)
         self._write_certificates()
         self._install_load_balancer()
         self._configure_hacluster()
         self._set_nginx_version()
 
-    def _request_server_certificates(self):
+    def _request_server_certificates(self, event):
         """Request the certificates to the CA authority."""
         status.add(MaintenanceStatus("Requesting certificate"))
-        if not self.certificates.is_ready:
-            msg = "Certificates relation is not ready."
-            status.add(BlockedStatus(msg))
-            log.info(msg)
+        if not self._check_certificates(event):
             return
 
         common_name = self._get_public_address()
