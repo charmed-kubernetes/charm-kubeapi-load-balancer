@@ -227,7 +227,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """Provide load balancer addresses to the requests based on their protocol and address type."""
         lb_addresses = self._get_lb_addresses()
 
-        for request in self.load_balancer.all_requests:
+        for request in self.load_balancer.new_requests:
             response = request.response
             if request.protocol not in (
                 request.protocols.tcp,
@@ -244,7 +244,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             else:
                 network: Binding = self.model.get_binding("lb-consumers")
                 private_address = network.network.bind_address
-                public_address = network.network.ingress_address
+                public_address = self._get_public_address()
             if request.public:
                 response.address = public_address
             else:
