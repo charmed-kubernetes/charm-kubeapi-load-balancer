@@ -227,7 +227,7 @@ class TestCharm(unittest.TestCase):
             mock_lb_addresses = ["10.1.1.1", "10.1.1.2"]
             mock_event = MagicMock()
             mock_get_lb_addresses.return_value = mock_lb_addresses
-            mock_load_balancer.all_requests = [mock_request]
+            mock_load_balancer.new_requests = [mock_request]
 
             self.charm._provide_lbs(mock_event)
 
@@ -241,7 +241,7 @@ class TestCharm(unittest.TestCase):
             mock_event = MagicMock()
             mock_request.protocol = "unsupported"
             mock_lb_addresses = ["10.1.1.1", "10.1.1.2"]
-            mock_load_balancer.all_requests = [mock_request]
+            mock_load_balancer.new_requests = [mock_request]
             mock_get_lb_addresses.return_value = mock_lb_addresses
 
             self.charm._provide_lbs(mock_event)
@@ -259,7 +259,7 @@ class TestCharm(unittest.TestCase):
         ) as mock_binding:
             mock_request = MagicMock()
             mock_request.protocol = "tcp"
-            mock_load_balancer.all_requests = [mock_request]
+            mock_load_balancer.new_requests = [mock_request]
             mock_get_lb_addresses.return_value = []
             mock_network = MagicMock()
             mock_network.network.bind_address = "10.1.1.3"
@@ -276,7 +276,7 @@ class TestCharm(unittest.TestCase):
         with patch.object(self.charm, "load_balancer") as mock_load_balancer:
             mock_request = MagicMock()
             mock_request.protocol = "tcp"
-            mock_load_balancer.all_requests = [mock_request]
+            mock_load_balancer.new_requests = [mock_request]
             mock_get_lb_addresses.return_value = []
             mock_lb_addresses = ["10.1.1.1", "10.1.1.2"]
             mock_get_lb_addresses.return_value = mock_lb_addresses
