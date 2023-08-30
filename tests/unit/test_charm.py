@@ -215,7 +215,7 @@ class TestCharm(unittest.TestCase):
         mock_service_stop,
         mock_path,
     ):
-        with (patch.object(self.charm.model.resources, "fetch") as mock_fetch,):
+        with patch.object(self.charm.model.resources, "fetch") as mock_fetch:
             mock_resource = mock_fetch.return_value
             mock_resource.stat().st_size = 3000000
             self.charm._install_exporter()
