@@ -4,6 +4,8 @@ applications:
     charm: {{charm}}
     num_units: 1
     expose: true
+    resources:
+      nginx-prometheus-exporter: {{resource_path}}/nginx-prometheus-exporter_linux_{{arch}}.tar.gz
 relations:
 - [kubeapi-load-balancer:lb-consumers, kubernetes-control-plane:loadbalancer-internal]
 - [kubeapi-load-balancer:lb-consumers, kubernetes-control-plane:loadbalancer-external]

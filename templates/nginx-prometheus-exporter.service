@@ -1,0 +1,18 @@
+[Unit]
+Description=Nginx Prometheus Exporter
+Wants=network-online.target
+After=network-online.target
+
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5s
+
+ExecStart=/opt/nginx-prometheus-exporter/nginx-prometheus-exporter \
+    -nginx.scrape-uri="http://localhost:8080/status"\
+    -web.listen-address=":9113"
+
+[Install]
+WantedBy=multi-user.target
