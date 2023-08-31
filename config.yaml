@@ -27,7 +27,7 @@ options:
 
       ```yaml
         worker_connections: 512
-        accept_mutex: "on";
+        accept_mutex: "on"
       ```
 
       The directives specified here modifies how Nginx hanfles connections a a general. For
