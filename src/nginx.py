@@ -1,6 +1,9 @@
 """NGINX helper module."""
 
 import logging
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import charms.operator_libs_linux.v0.apt as apt
@@ -10,6 +13,8 @@ from ops.framework import Object
 from ops.model import MaintenanceStatus
 
 PACKAGE = "nginx-full"
+NGINX_CONF_PATH = Path("/etc/nginx/nginx.conf")
+TEMPLATES_PATH = Path.cwd() / "templates"
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +44,26 @@ class NginxConfigurer(Object):
         except apt.PackageError:
             log.exception(f"Could not install package {PACKAGE}")
 
+    def configure_daemon(self, context: dict):
+        """Configure the Nginx daemon using the specified directives context.
+
+        Args:
+            context (dict): The directives context to be used in the template.
+        """
+        backup_path = NGINX_CONF_PATH.parent / (NGINX_CONF_PATH.name + ".bak")
+        shutil.copy(NGINX_CONF_PATH, backup_path)
+        self._render_template(
+            template_file=TEMPLATES_PATH / "nginx.conf",
+            dest=NGINX_CONF_PATH,
+            context=context,
+        )
+        try:
+            self._verify_nginx_config()
+            os.remove(backup_path)
+        except subprocess.CalledProcessError as e:
+            shutil.copy(backup_path, NGINX_CONF_PATH)
+            raise e
+
     def configure_site(self, site, template, **kwargs):
         """Configure an Nginx site using the specified template and context.
 
@@ -64,3 +89,7 @@ class NginxConfigurer(Object):
         site_path = Path("/etc/nginx/sites-enabled/default")
         if site_path.exists():
             site_path.unlink()
+
+    def _verify_nginx_config(self):
+        cmd = ["nginx", "-t"]
+        subprocess.check_output(cmd)

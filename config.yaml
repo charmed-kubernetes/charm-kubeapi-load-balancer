@@ -18,6 +18,36 @@ options:
       kubeapi-load-balancer charm. The workers will evenly distribute the load by alternating
       between the IP addresses in this list. For example, if you have 2 IPs and 4 workers,
       each IP will be used by 2 workers.
+  events-context:
+    type: string
+    default: ""
+    description: |
+      This field allow to include directives for the events context in the Nginx Configuration file.
+      It should be formatted as a YAML string. For instance:
+
+      ```yaml
+        worker_connections: 512
+        accept_mutex: "on";
+      ```
+
+      The directives specified here modifies how Nginx hanfles connections a a general. For
+      detailed information about these directives, refer to the upstream documentation:
+        https://nginx.org/en/docs/
+  main-context:
+    type: string
+    default: ""
+    description: |
+      This field allows to include directives for the main context in the Nginx Configuration file.
+      It should be formatted as a YAML string. For instance:
+
+      ```yaml
+        worker_rlimit_nofile: 1024
+        worker_processes: "auto"
+      ```
+
+      The directives specified here have a broad impact on the entire NGINX configuration. For
+      detailed information about these directives, refer to the upstream documentation:
+        https://nginx.org/en/docs/
   ha-cluster-dns:
     type: string
     default: ""

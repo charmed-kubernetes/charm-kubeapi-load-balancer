@@ -46,21 +46,18 @@ class TestCharm(unittest.TestCase):
             mock_hacluster.configure_hacluster.assert_called_once()
             mock_hacluster.add_service.assert_called_once_with("nginx", "nginx")
 
-    def test_configure_nginx(self):
-        with patch.object(self.charm, "_write_nginx_logrotate_config") as mock_write:
-            servers = {80: {("backend1", 8080), ("backend2", 8081)}}
-            self.harness.update_config({"proxy_read_timeout": 10})
-            self.charm._configure_nginx(servers)
-            self.mock_nginx.return_value.configure_site.assert_called_once_with(
-                "apilb",
-                Path.cwd() / "templates" / "apilb.conf",
-                servers=servers,
-                server_certificate="/srv/kubernetes/server.crt",
-                server_key="/srv/kubernetes/server.key",
-                proxy_read_timeout=10,
-            )
-            self.mock_nginx.return_value.remove_default_site.assert_called_once()
-            mock_write.assert_called_once()
+    def test_configure_nginx_sites(self):
+        servers = {80: {("backend1", 8080), ("backend2", 8081)}}
+        self.harness.update_config({"proxy_read_timeout": 10})
+        self.charm._configure_nginx_sites(servers)
+        self.mock_nginx.return_value.configure_site.assert_called_once_with(
+            "apilb",
+            Path.cwd() / "templates" / "apilb.conf",
+            servers=servers,
+            server_certificate="/srv/kubernetes/server.crt",
+            server_key="/srv/kubernetes/server.key",
+            proxy_read_timeout=10,
+        )
 
     def test__create_server_dict(self):
         mock_request1 = MagicMock()
@@ -145,7 +142,7 @@ class TestCharm(unittest.TestCase):
 
     @patch("charm.CharmKubeApiLoadBalancer._restart_nginx")
     @patch("charm.CharmKubeApiLoadBalancer._manage_ports")
-    @patch("charm.CharmKubeApiLoadBalancer._configure_nginx")
+    @patch("charm.CharmKubeApiLoadBalancer._configure_nginx_sites")
     @patch("charm.CharmKubeApiLoadBalancer._create_server_dict")
     @patch("charm.CharmKubeApiLoadBalancer._change_owner")
     @patch("charm.Path.exists")
@@ -154,7 +151,7 @@ class TestCharm(unittest.TestCase):
         mock_exists,
         mock_change_owner,
         mock_create_server_dict,
-        mock_configure_nginx,
+        mock_configure_nginx_sites,
         mock_manage_ports,
         mock_restart_nginx,
     ):
@@ -175,7 +172,7 @@ class TestCharm(unittest.TestCase):
                 ]
             )
             mock_create_server_dict.assert_called_once()
-            mock_configure_nginx.assert_called_with(mock_servers)
+            mock_configure_nginx_sites.assert_called_with(mock_servers)
             mock_manage_ports.assert_called_with(mock_servers.keys())
             mock_restart_nginx.assert_called_once()
 
@@ -201,8 +198,10 @@ class TestCharm(unittest.TestCase):
     @patch("charm.CharmKubeApiLoadBalancer._install_load_balancer")
     @patch("charm.CharmKubeApiLoadBalancer._configure_hacluster")
     @patch("charm.CharmKubeApiLoadBalancer._set_nginx_version")
+    @patch("charm.CharmKubeApiLoadBalancer._configure_nginx")
     def test_reconcile(
         self,
+        mock_configure_nginx,
         mock_set_nginx_version,
         mock_configure_hacluster,
         mock_install_load_balancer,
@@ -217,6 +216,7 @@ class TestCharm(unittest.TestCase):
         mock_install_load_balancer.assert_called_once()
         mock_configure_hacluster.assert_called_once()
         mock_set_nginx_version.assert_called_once()
+        mock_configure_nginx.assert_called_once()
 
     @patch("charm.CharmKubeApiLoadBalancer._get_lb_addresses")
     def test_provide_lbs_with_tcp_protocol(self, mock_get_lb_addresses):
