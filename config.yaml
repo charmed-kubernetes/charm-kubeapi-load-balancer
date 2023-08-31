@@ -18,27 +18,25 @@ options:
       kubeapi-load-balancer charm. The workers will evenly distribute the load by alternating
       between the IP addresses in this list. For example, if you have 2 IPs and 4 workers,
       each IP will be used by 2 workers.
-  events-context:
+  nginx-events-config:
     type: string
     default: ""
     description: |
-      This field allow to include directives for the events context in the Nginx Configuration file.
-      It should be formatted as a YAML string. For instance:
+      This option allows the juju operator to configure directives inside the nginx events context in /etc/nginx/nginx.conf. Provide a valid block of YAML. For instance:
 
       ```yaml
         worker_connections: 512
         accept_mutex: "on"
       ```
 
-      The directives specified here modifies how Nginx hanfles connections a a general. For
+      The directives specified here modify how Nginx handles connections in general. For
       detailed information about these directives, refer to the upstream documentation:
         https://nginx.org/en/docs/
-  main-context:
+  nginx-main-config:
     type: string
     default: ""
     description: |
-      This field allows to include directives for the main context in the Nginx Configuration file.
-      It should be formatted as a YAML string. For instance:
+      This option allows the juju operator to configure directives in the main context block of /etc/nginx/nginx.conf. Provide a valid block of YAML. For instance:
 
       ```yaml
         worker_rlimit_nofile: 1024

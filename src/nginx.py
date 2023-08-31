@@ -46,6 +46,7 @@ class NginxConfigurer(Object):
 
     def configure_daemon(self, context: dict):
         """Configure the Nginx daemon using the specified directives context.
+           Restore the prior configuration if the configuration fails to validate
 
         Args:
             context (dict): The directives context to be used in the template.
