@@ -51,19 +51,14 @@ class NginxConfigurer(Object):
         Args:
             context (dict): The directives context to be used in the template.
         """
-        backup_path = NGINX_CONF_PATH.parent / (NGINX_CONF_PATH.name + ".bak")
-        shutil.copy(NGINX_CONF_PATH, backup_path)
+        new_config_path = NGINX_CONF_PATH.parent / (NGINX_CONF_PATH.name + ".new")
         self._render_template(
             template_file=TEMPLATES_PATH / "nginx.conf",
-            dest=NGINX_CONF_PATH,
+            dest=new_config_path,
             context=context,
         )
-        try:
-            self._verify_nginx_config()
-            os.remove(backup_path)
-        except subprocess.CalledProcessError as e:
-            shutil.copy(backup_path, NGINX_CONF_PATH)
-            raise e
+        self._verify_nginx_config(new_config_path)
+        shutil.copy(new_config_path, NGINX_CONF_PATH)
 
     def configure_site(self, site, template, **kwargs):
         """Configure an Nginx site using the specified template and context.
@@ -91,6 +86,16 @@ class NginxConfigurer(Object):
         if site_path.exists():
             site_path.unlink()
 
-    def _verify_nginx_config(self):
-        cmd = ["nginx", "-t"]
+    def _verify_nginx_config(self, config_path: Path):
+        """Verify the correctness of a Nginx configuration file.
+
+        This method takes a path to an Nginx configuration file and performs a syntax
+        check using the `nginx` CLI tool.
+
+        Args:
+            config_path (Path): The path to the Nginx configuration file to be verified.
+        Raises:
+            CalledProcessError: If the `nginx` command returns a non-zero exit code.
+        """
+        cmd = ["nginx", "-t", "-c", str(path)]
         subprocess.check_output(cmd)
