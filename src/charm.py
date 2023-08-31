@@ -115,8 +115,8 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """
         context = {}
         try:
-            context["main"] = yaml.safe_load(self.config.get("nginx-main-context"))
-            context["events"] = yaml.safe_load(self.config.get("nginx-events-context"))
+            context["main"] = yaml.safe_load(self.config.get("nginx-main-config"))
+            context["events"] = yaml.safe_load(self.config.get("nginx-events-config"))
         except YAMLError:
             log.exception("Encountered juju config parsing error")
             status.add(BlockedStatus("Failed to configure NGINX context. Check config values."))
