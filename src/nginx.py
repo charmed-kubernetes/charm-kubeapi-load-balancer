@@ -1,7 +1,6 @@
 """NGINX helper module."""
 
 import logging
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -46,7 +45,8 @@ class NginxConfigurer(Object):
 
     def configure_daemon(self, context: dict):
         """Configure the Nginx daemon using the specified directives context.
-           Restore the prior configuration if the configuration fails to validate
+
+        Restore the prior configuration if the configuration fails to validate
 
         Args:
             context (dict): The directives context to be used in the template.
@@ -94,8 +94,9 @@ class NginxConfigurer(Object):
 
         Args:
             config_path (Path): The path to the Nginx configuration file to be verified.
+
         Raises:
             CalledProcessError: If the `nginx` command returns a non-zero exit code.
         """
-        cmd = ["nginx", "-t", "-c", str(path)]
+        cmd = ["nginx", "-t", "-c", str(config_path)]
         subprocess.check_output(cmd)
