@@ -1,6 +1,8 @@
 """NGINX helper module."""
 
 import logging
+import shutil
+import subprocess
 from pathlib import Path
 
 import charms.operator_libs_linux.v0.apt as apt
@@ -10,6 +12,8 @@ from ops.framework import Object
 from ops.model import MaintenanceStatus
 
 PACKAGE = "nginx-full"
+NGINX_CONF_PATH = Path("/etc/nginx/nginx.conf")
+TEMPLATES_PATH = Path.cwd() / "templates"
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +43,21 @@ class NginxConfigurer(Object):
         except apt.PackageError:
             log.exception(f"Could not install package {PACKAGE}")
 
+    def configure_daemon(self, context: dict):
+        """Configure the Nginx daemon using the specified directives context.
+
+        Args:
+            context (dict): The directives context to be used in the template.
+        """
+        new_config_path = NGINX_CONF_PATH.parent / (NGINX_CONF_PATH.name + ".new")
+        self._render_template(
+            template_file=TEMPLATES_PATH / "nginx.conf",
+            dest=new_config_path,
+            context=context,
+        )
+        self._verify_nginx_config(new_config_path)
+        shutil.copy(new_config_path, NGINX_CONF_PATH)
+
     def configure_site(self, site, template, **kwargs):
         """Configure an Nginx site using the specified template and context.
 
@@ -64,3 +83,18 @@ class NginxConfigurer(Object):
         site_path = Path("/etc/nginx/sites-enabled/default")
         if site_path.exists():
             site_path.unlink()
+
+    def _verify_nginx_config(self, config_path: Path):
+        """Verify the correctness of a Nginx configuration file.
+
+        This method takes a path to an Nginx configuration file and performs a syntax
+        check using the `nginx` CLI tool.
+
+        Args:
+            config_path (Path): The path to the Nginx configuration file to be verified.
+
+        Raises:
+            CalledProcessError: If the `nginx` command returns a non-zero exit code.
+        """
+        cmd = ["nginx", "-t", "-c", str(config_path)]
+        subprocess.check_output(cmd)

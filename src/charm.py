@@ -22,6 +22,7 @@ from typing import Dict, List, Set
 
 import charms.contextual_status as status
 import ops
+import yaml
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.operator_libs_linux.v1.systemd import (
     daemon_reload,
@@ -35,6 +36,7 @@ from loadbalancer_interface import LBConsumers
 from nginx import NginxConfigurer
 from ops.interface_tls_certificates import CertificatesRequires
 from ops.model import Binding, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
+from yaml import YAMLError
 
 log = logging.getLogger(__name__)
 
@@ -116,7 +118,31 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         else:
             self.hacluster.remove_service("nginx", "nginx")
 
-    def _configure_nginx(self, servers: Dict[int, Set]):
+    def _configure_nginx(self):
+        """Configure NGINX based on provided directives.
+
+        This method configures main and events contexts with the directives provided
+        in the configuration, removes the default NGINX site, and writes the NGINX log
+        rotation configuration.
+        """
+        context = {}
+        try:
+            context["main"] = yaml.safe_load(self.config.get("nginx-main-config"))
+            context["events"] = yaml.safe_load(self.config.get("nginx-events-config"))
+        except YAMLError:
+            log.exception("Encountered juju config parsing error")
+            status.add(BlockedStatus("Failed to configure NGINX context. Check config values."))
+            return
+        try:
+            self.nginx.configure_daemon(context)
+            self.nginx.remove_default_site()
+            self._write_nginx_logrotate_config()
+        except subprocess.CalledProcessError:
+            msg = "Failed to change Nginx.conf"
+            log.exception(msg)
+            status.add(BlockedStatus(msg))
+
+    def _configure_nginx_sites(self, servers: Dict[int, Set]):
         """Configure NGINX with the server dictionary.
 
         Args:
@@ -132,8 +158,6 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             proxy_read_timeout=self.config.get("proxy_read_timeout"),
         )
         self.nginx.configure_site("metrics", TEMPLATES_PATH / "metrics.conf")
-        self.nginx.remove_default_site()
-        self._write_nginx_logrotate_config()
 
     def _create_server_dict(self) -> Dict[int, Set]:
         """Create a dictionary of servers and their backends.
@@ -215,7 +239,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         self._change_owner(SERVER_KEY_PATH, "www-data")
 
         servers = self._create_server_dict()
-        self._configure_nginx(servers)
+        self._configure_nginx_sites(servers)
         self._manage_ports(servers.keys())
 
         self._restart_nginx()
@@ -302,6 +326,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
     def _reconcile(self, event):
         self._request_server_certificates(event)
         self._write_certificates()
+        self._configure_nginx()
         self._install_load_balancer()
         self._install_exporter()
         self._configure_hacluster()

@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, call, mock_open, patch
 
 from nginx import NginxConfigurer
 
@@ -13,6 +13,25 @@ class TestNginxConfigurer(unittest.TestCase):
         self.config = MagicMock()
         self.mock_apt = mock_apt
         self.nginx = NginxConfigurer(self.charm, self.config)
+
+    @patch("os.remove")
+    @patch("shutil.copy")
+    def test__configure_daemon(self, mock_copy, mock_remove):
+        context = {"main": {"foo": "bar"}, "events": {"baz": "test"}}
+
+        with open("./templates/nginx.conf") as f:
+            input = f.read()
+
+        with patch("builtins.open", mock_open(read_data=input)) as mock_write, patch.object(
+            self.nginx, "_verify_nginx_config"
+        ):
+            self.nginx.configure_daemon(context)
+
+            (rendered_content,) = mock_write.return_value.write.call_args[0]
+            expected_content = ("foo bar;", "baz test;")
+
+            for content in expected_content:
+                assert content in rendered_content
 
     def test__render_template(self):
         context = {"name": "CK"}
