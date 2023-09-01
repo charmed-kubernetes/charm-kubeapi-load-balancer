@@ -220,11 +220,10 @@ class TestCharm(unittest.TestCase):
             mock_resource.stat().st_size = 3000000
             self.charm._install_exporter()
 
-            assert mock_path.mock_calls == [
+            mock_path.assert_has_calls == [
                 call("/opt", "nginx-prometheus-exporter"),
                 call().mkdir(parents=True, exist_ok=True),
                 call("/etc/systemd/system/nginx-prometheus-exporter.service"),
-                call().exists(),
                 call().exists().__bool__(),
             ]
             mock_service_stop.assert_called_once_with("nginx-prometheus-exporter")

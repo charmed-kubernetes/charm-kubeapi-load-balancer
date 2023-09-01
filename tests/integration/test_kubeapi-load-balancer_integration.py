@@ -39,7 +39,7 @@ async def test_build_and_deploy(ops_test):
         ops_test.Bundle("kubernetes-core", channel="edge"),
         Path("tests/data/charm.yaml"),
         arch="amd64",
-        charm=charm,
+        charm=charm.resolve(),
         resource_path=resource_path,
     )
 
