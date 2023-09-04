@@ -17,7 +17,7 @@ class TestNginxConfigurer(unittest.TestCase):
     @patch("os.remove")
     @patch("shutil.copy")
     def test__configure_daemon(self, mock_copy, mock_remove):
-        context = {"main": {"foo": "bar"}, "events": {"baz": "test"}}
+        context = {"main": {"foo": "bar"}, "events": {"baz": "test"}, "http": {"plugh": "xyzzy"}}
 
         with open("./templates/nginx.conf") as f:
             input = f.read()
@@ -28,7 +28,7 @@ class TestNginxConfigurer(unittest.TestCase):
             self.nginx.configure_daemon(context)
 
             (rendered_content,) = mock_write.return_value.write.call_args[0]
-            expected_content = ("foo bar;", "baz test;")
+            expected_content = ("foo bar;", "baz test;", "plugh xyzzy;")
 
             for content in expected_content:
                 assert content in rendered_content

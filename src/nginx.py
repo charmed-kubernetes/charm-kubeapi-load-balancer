@@ -3,7 +3,9 @@
 import logging
 import shutil
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict
 
 import charms.operator_libs_linux.v0.apt as apt
 import ops
@@ -14,8 +16,57 @@ from ops.model import MaintenanceStatus
 PACKAGE = "nginx-full"
 NGINX_CONF_PATH = Path("/etc/nginx/nginx.conf")
 TEMPLATES_PATH = Path.cwd() / "templates"
+CONTEXTS = ("main", "events", "http")
+
+MAIN_CONTEXT_DEFAULTS = {"worker_processes": "auto", "user": "www-data", "pid": "/run/nginx.pid"}
+
+EVENTS_CONTEXT_DEFAULTS = {"worker_connections": "768"}
+
+HTTP_CONTEXT_DEFAULTS = {
+    "client_max_body_size": "3m",
+    "sendfile": "on",
+    "tcp_nopush": "on",
+    "types_hash_max_size": "2048",
+    "default_type": "application/octet-stream",
+    "ssl_protocols": "TLSv1 TLSv1.1 TLSv1.2 TLSv1.3",
+    "ssl_prefer_server_ciphers": "on",
+    "gzip": "on",
+}
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class ConfigurationContext:
+    """A class to represent a context with a set of default and custom configurations."""
+
+    default_settings: dict = field(default_factory=dict)
+    extra_settings: dict = field(default_factory=dict)
+
+    @property
+    def defaults(self) -> dict:
+        """Returns the default configurations of the context.
+
+        If a configuration is present in both, the custom configuration overrides
+        the default.
+
+        Returns:
+            dict: The merged defaults dictionary.
+        """
+        return {
+            key: self.extra_settings.get(key, value)
+            for key, value in self.default_settings.items()
+        }
+
+    @property
+    def extra(self) -> dict:
+        """Returns the configurations that are exclusively in the custom configuration.
+
+        Returns:
+            dict: The dictionary of extra configurations.
+        """
+        extra_keys = set(self.extra_settings.keys()) - set(self.default_settings.keys())
+        return {key: self.extra_settings[key] for key in extra_keys}
 
 
 class NginxConfigurer(Object):
@@ -26,6 +77,11 @@ class NginxConfigurer(Object):
         self.package = apt.add_package(PACKAGE, update_cache=True)
         self.charm = charm
         self.config = config
+        self.contexts: Dict[str, ConfigurationContext] = {
+            "main": ConfigurationContext(MAIN_CONTEXT_DEFAULTS, {}),
+            "events": ConfigurationContext(EVENTS_CONTEXT_DEFAULTS, {}),
+            "http": ConfigurationContext(HTTP_CONTEXT_DEFAULTS, {}),
+        }
 
         self.framework.observe(self.charm.on.upgrade_charm, self._upgrade_nginx)
 
@@ -43,12 +99,25 @@ class NginxConfigurer(Object):
         except apt.PackageError:
             log.exception(f"Could not install package {PACKAGE}")
 
-    def configure_daemon(self, context: dict):
+    def configure_daemon(self, contexts: dict):
         """Configure the Nginx daemon using the specified directives context.
 
         Args:
-            context (dict): The directives context to be used in the template.
+            contexts (dict): The directives context to be used in the template.
         """
+        context = {}
+
+        for key in CONTEXTS:
+            current_context = self.contexts.get(key, {})
+            if current_context:
+                current_context.extra_settings = contexts.get(key, {})
+                context[key] = {
+                    "defaults": current_context.defaults,
+                    "extra": current_context.extra,
+                }
+            else:
+                context[key] = {"defaults": {}, "extra": {}}
+
         new_config_path = NGINX_CONF_PATH.parent / (NGINX_CONF_PATH.name + ".new")
         self._render_template(
             template_file=TEMPLATES_PATH / "nginx.conf",

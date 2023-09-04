@@ -113,16 +113,17 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         in the configuration, removes the default NGINX site, and writes the NGINX log
         rotation configuration.
         """
-        context = {}
+        contexts = {}
         try:
-            context["main"] = yaml.safe_load(self.config.get("nginx-main-config"))
-            context["events"] = yaml.safe_load(self.config.get("nginx-events-config"))
+            contexts["main"] = yaml.safe_load(self.config.get("nginx-main-config")) or {}
+            contexts["events"] = yaml.safe_load(self.config.get("nginx-events-config")) or {}
+            contexts["http"] = yaml.safe_load(self.config.get("nginx-http-config")) or {}
         except YAMLError:
             log.exception("Encountered juju config parsing error")
             status.add(BlockedStatus("Failed to configure NGINX context. Check config values."))
             return
         try:
-            self.nginx.configure_daemon(context)
+            self.nginx.configure_daemon(contexts)
             self.nginx.remove_default_site()
             self._write_nginx_logrotate_config()
         except subprocess.CalledProcessError:
