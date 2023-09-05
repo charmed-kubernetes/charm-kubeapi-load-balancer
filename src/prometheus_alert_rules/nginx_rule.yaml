@@ -1,12 +1,21 @@
 groups:
-  - name: nginx_service_health
+  - name: nginx_endpoint_health
     rules:
-      - alert: NginxServiceUnhealthy
-        expr: node_systemd_unit_state{name="nginx.service",state="active",type="forking"} != 1
-        for: 1m
+      - alert: NginxEndpointUnhealthy
+        expr: nginx_up{juju_charm!=".*"} != 1
+        for: 0m
         labels:
           severity: critical
         annotations:
-          summary: "Nginx service is unhealthy"
-          description: "The Nginx service unit is not in the expected healthy state."
-
+          summary: Nginx endpoint is unhealthy (instance {{ $labels.instance }})
+          description: The Nginx endpoint is not in the expected healthy state.
+  - name: prometheus_target_missing
+    rules:
+    - alert: PrometheusTargetMissing
+      expr: up{juju_charm!=".*"} == 0
+      for: 0m
+      labels:
+        severity: critical
+      annotations:
+        summary: Prometheus target missing (instance {{ $labels.instance }})
+        description: "Nginx exporter target has disappeared. An exporter might be crashed.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

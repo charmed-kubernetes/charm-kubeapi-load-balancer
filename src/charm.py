@@ -16,6 +16,7 @@ import re
 import shutil
 import socket
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import Dict, List, Set
 
@@ -23,13 +24,18 @@ import charms.contextual_status as status
 import ops
 import yaml
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
-from charms.operator_libs_linux.v1.systemd import service_restart
+from charms.operator_libs_linux.v1.systemd import (
+    daemon_reload,
+    service_restart,
+    service_running,
+    service_stop,
+)
 from charms.reconciler import Reconciler
 from hacluster import HACluster
 from loadbalancer_interface import LBConsumers
 from nginx import NginxConfigurer
 from ops.interface_tls_certificates import CertificatesRequires
-from ops.model import Binding, BlockedStatus, MaintenanceStatus, WaitingStatus
+from ops.model import Binding, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from yaml import YAMLError
 
 log = logging.getLogger(__name__)
@@ -43,6 +49,7 @@ SERVER_CRT_PATH = CERT_DIR / "server.crt"
 SERVER_KEY_PATH = CERT_DIR / "server.key"
 
 NGINX_SERVICE = "nginx"
+EXPORTER = "nginx-prometheus-exporter"
 
 
 class CharmKubeApiLoadBalancer(ops.CharmBase):
@@ -52,7 +59,12 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         super().__init__(*args)
 
         self.certificates = CertificatesRequires(self)
-        self.cos_agent = COSAgentProvider(self)
+        self.cos_agent = COSAgentProvider(
+            self,
+            metrics_endpoints=[
+                {"path": "/metrics", "port": 9113},  # nginx-prometheus-exporter
+            ],
+        )
         self.load_balancer = LBConsumers(self, "lb-consumers")
         self.load_balancer.follower_perms(read=True)
         self.reconciler = Reconciler(self, self._reconcile)
@@ -139,12 +151,13 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """
         self.nginx.configure_site(
             "apilb",
-            Path(Path.cwd() / "templates/apilb.conf"),
+            TEMPLATES_PATH / "apilb.conf",
             servers=servers,
             server_certificate=str(SERVER_CRT_PATH),
             server_key=str(SERVER_KEY_PATH),
             proxy_read_timeout=self.config.get("proxy_read_timeout"),
         )
+        self.nginx.configure_site("metrics", TEMPLATES_PATH / "metrics.conf")
 
     def _create_server_dict(self) -> Dict[int, Set]:
         """Create a dictionary of servers and their backends.
@@ -216,7 +229,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         status.add(MaintenanceStatus("Installing Load Balancer"))
         if not (SERVER_CRT_PATH.exists() and SERVER_KEY_PATH.exists()):
             log.info("Skipping due to missing certificate.")
-            return
+            return False
         if not self.load_balancer.all_requests:
             status.add(WaitingStatus("Load Balancer request not ready"))
             log.info("Skipping due to requests not ready.")
@@ -230,6 +243,41 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         self._manage_ports(servers.keys())
 
         self._restart_nginx()
+
+    def _install_exporter(self) -> bool:
+        resource_name = EXPORTER
+        try:
+            resource_path = self.model.resources.fetch(resource_name)
+        except ModelError:
+            status.add(BlockedStatus(f"Error claiming {resource_name}"))
+            return False
+        except NameError:
+            status.add(BlockedStatus(f"Resource {resource_name} not found"))
+            return
+        filesize = resource_path.stat().st_size
+        if filesize < 1000000:
+            status.add(BlockedStatus(f"Incomplete resource: {resource_name}"))
+            return
+        status.add(MaintenanceStatus(f"Unpacking {resource_name}"))
+
+        if service_running(EXPORTER):
+            service_stop(EXPORTER)
+
+        install_path = Path("/opt", EXPORTER)
+        install_path.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(resource_path) as tar:
+            tar.extractall(install_path)
+
+        path = Path(f"/etc/systemd/system/{EXPORTER}.service")
+        if not path.exists():
+            template_path = TEMPLATES_PATH / f"{EXPORTER}.service"
+            shutil.copy2(template_path, path)
+
+        if not daemon_reload():
+            status.add(BlockedStatus(f"Cannot load service: {resource_name}"))
+            return
+
+        service_restart(EXPORTER)
 
     def _manage_ports(self, ports: Set[int]):
         """Open ports on the unit and close the unwanted ones.
@@ -280,6 +328,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         self._write_certificates()
         self._configure_nginx()
         self._install_load_balancer()
+        self._install_exporter()
         self._configure_hacluster()
         self._set_nginx_version()
 

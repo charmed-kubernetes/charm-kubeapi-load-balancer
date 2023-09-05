@@ -5,3 +5,5 @@ build/
 .coverage
 __pycache__/
 *.py[cod]
+nginx-prometheus-exporter_linux_*.tar.gz
+sha256sums.txt

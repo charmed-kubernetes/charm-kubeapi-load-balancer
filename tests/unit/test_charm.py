@@ -50,14 +50,20 @@ class TestCharm(unittest.TestCase):
         servers = {80: {("backend1", 8080), ("backend2", 8081)}}
         self.harness.update_config({"proxy_read_timeout": 10})
         self.charm._configure_nginx_sites(servers)
-        self.mock_nginx.return_value.configure_site.assert_called_once_with(
-            "apilb",
-            Path.cwd() / "templates" / "apilb.conf",
-            servers=servers,
-            server_certificate="/srv/kubernetes/server.crt",
-            server_key="/srv/kubernetes/server.key",
-            proxy_read_timeout=10,
-        )
+        assert self.mock_nginx.return_value.configure_site.mock_calls == [
+            call(
+                "apilb",
+                Path.cwd() / "templates" / "apilb.conf",
+                servers=servers,
+                server_certificate="/srv/kubernetes/server.crt",
+                server_key="/srv/kubernetes/server.key",
+                proxy_read_timeout=10,
+            ),
+            call(
+                "metrics",
+                Path.cwd() / "templates" / "metrics.conf",
+            ),
+        ]
 
     def test__create_server_dict(self):
         mock_request1 = MagicMock()
@@ -193,9 +199,38 @@ class TestCharm(unittest.TestCase):
             mock_open.assert_called_once_with(protocol="tcp", port=8081)
             mock_close.assert_called_once_with(protocol="tcp", port=8080)
 
+    @patch("charm.Path")
+    @patch("charm.tarfile", MagicMock())
+    @patch("charm.service_running", MagicMock(return_value=True))
+    @patch("charm.service_stop")
+    @patch("charm.daemon_reload")
+    @patch("charm.service_restart")
+    def test_install_exporter(
+        self,
+        mock_service_restart,
+        mock_daemon_reload,
+        mock_service_stop,
+        mock_path,
+    ):
+        with patch.object(self.charm.model.resources, "fetch") as mock_fetch:
+            mock_resource = mock_fetch.return_value
+            mock_resource.stat().st_size = 3000000
+            self.charm._install_exporter()
+
+            mock_path.assert_has_calls == [
+                call("/opt", "nginx-prometheus-exporter"),
+                call().mkdir(parents=True, exist_ok=True),
+                call("/etc/systemd/system/nginx-prometheus-exporter.service"),
+                call().exists().__bool__(),
+            ]
+            mock_service_stop.assert_called_once_with("nginx-prometheus-exporter")
+            mock_daemon_reload.assert_called_once_with()
+            mock_service_restart.assert_called_once_with("nginx-prometheus-exporter")
+
     @patch("charm.CharmKubeApiLoadBalancer._request_server_certificates")
     @patch("charm.CharmKubeApiLoadBalancer._write_certificates")
     @patch("charm.CharmKubeApiLoadBalancer._install_load_balancer")
+    @patch("charm.CharmKubeApiLoadBalancer._install_exporter")
     @patch("charm.CharmKubeApiLoadBalancer._configure_hacluster")
     @patch("charm.CharmKubeApiLoadBalancer._set_nginx_version")
     @patch("charm.CharmKubeApiLoadBalancer._configure_nginx")
@@ -205,6 +240,7 @@ class TestCharm(unittest.TestCase):
         mock_set_nginx_version,
         mock_configure_hacluster,
         mock_install_load_balancer,
+        mock_install_exporter,
         mock_write_certificates,
         mock_request_server_certificates,
     ):
@@ -214,6 +250,7 @@ class TestCharm(unittest.TestCase):
         mock_request_server_certificates.assert_called_once()
         mock_write_certificates.assert_called_once()
         mock_install_load_balancer.assert_called_once()
+        mock_install_exporter.assert_called_once()
         mock_configure_hacluster.assert_called_once()
         mock_set_nginx_version.assert_called_once()
         mock_configure_nginx.assert_called_once()

@@ -23,11 +23,24 @@ async def test_build_and_deploy(ops_test):
         log.info("Build Charm...")
         charm = await ops_test.build_charm(".")
 
+    resource_path = ops_test.tmp_path / "charm-resources"
+    resource_path.mkdir()
+    resource_build_script = Path("./build-resources.sh").resolve()
+    log.info("Building charm resources")
+    retcode, stdout, stderr = await ops_test.run(str(resource_build_script), cwd=resource_path)
+    if retcode != 0:
+        log.error(f"retcode: {retcode}")
+        log.error(f"stdout:\n{stdout.strip()}")
+        log.error(f"stderr:\n{stderr.strip()}")
+        pytest.fail("Failed to build charm resources")
+
     log.info("Build Bundle...")
     bundle, *overlays = await ops_test.async_render_bundles(
         ops_test.Bundle("kubernetes-core", channel="edge"),
         Path("tests/data/charm.yaml"),
-        charm=charm,
+        arch="amd64",
+        charm=charm.resolve(),
+        resource_path=resource_path,
     )
 
     log.info("Deploying bundle")
@@ -59,3 +72,16 @@ async def test_load_balancer_forced_address(ops_test):
     finally:
         await api_lb.reset_config(["loadbalancer-ips"])
         await ops_test.model.wait_for_idle(status="active", timeout=10 * 60)
+
+
+async def test_load_balancer_metrics(ops_test):
+    """Validate that the node metrics are available."""
+    api_lb = ops_test.model.applications["kubeapi-load-balancer"]
+
+    action = await api_lb.units[0].run("curl http://localhost:8080/status")
+    result = await action.wait()
+    assert "Active connections: " in result.results["stdout"], "Nginx Status stub unavailable"
+
+    action = await api_lb.units[0].run("curl http://localhost:9113/metrics")
+    result = await action.wait()
+    assert "nginx_up 1" in result.results["stdout"], "Prometheus exporter unavailable"

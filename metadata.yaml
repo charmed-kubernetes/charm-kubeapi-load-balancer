@@ -13,6 +13,14 @@ subordinate: false
 series:
   - jammy
   - focal
+resources:
+  nginx-prometheus-exporter:
+    type: file
+    filename: nginx-prometheus-exporter.tar.gz
+    description: |-
+      Binary Release of the nginx prometheus exporter
+      https://github.com/nginxinc/nginx-prometheus-exporter/releases
+
 requires:
   apiserver:
     interface: http
