@@ -3,6 +3,7 @@
 import logging
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 import charms.operator_libs_linux.v0.apt as apt
@@ -15,7 +16,56 @@ PACKAGE = "nginx-full"
 NGINX_CONF_PATH = Path("/etc/nginx/nginx.conf")
 TEMPLATES_PATH = Path.cwd() / "templates"
 
+MAIN_CONTEXT_DEFAULTS = {"worker_processes": "auto", "user": "www-data", "pid": "/run/nginx.pid"}
+
+EVENTS_CONTEXT_DEFAULTS = {"worker_connections": "768"}
+
+HTTP_CONTEXT_DEFAULTS = {
+    "client_max_body_size": "3m",
+    "sendfile": "on",
+    "tcp_nopush": "on",
+    "types_hash_max_size": "2048",
+    "default_type": "application/octet-stream",
+    "ssl_protocols": "TLSv1 TLSv1.1 TLSv1.2 TLSv1.3",
+    "ssl_prefer_server_ciphers": "on",
+    "gzip": "on",
+}
+
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class ConfigurationContext:
+    """A class to represent a context with a set of default and custom configurations.
+
+    Attributes:
+        charm_default (dict): The default context configuration dictionary.
+        custom (dict): The custom context configuration which can override the default configuration.
+    """
+
+    charm_default: dict
+    custom: dict
+
+    @property
+    def defaults(self) -> dict:
+        """Returns the default configurations of the context.
+
+        If a configuration is present in both, the custom configuration overrides
+        the default.
+
+        Returns:
+            dict: The merged defaults dictionary.
+        """
+        return {k: self.custom.get(k, v) for k, v in self.charm_default.items()}
+
+    @property
+    def extra(self) -> dict:
+        """Returns the configurations that are exclusively in the custom configuration.
+
+        Returns:
+            dict: The dictionary of extra configurations.
+        """
+        return {k: v for k, v in self.custom.items() if k not in self.charm_default}
 
 
 class NginxConfigurer(Object):
@@ -43,17 +93,31 @@ class NginxConfigurer(Object):
         except apt.PackageError:
             log.exception(f"Could not install package {PACKAGE}")
 
-    def configure_daemon(self, context: dict):
+    def configure_daemon(self, custom_context: dict):
         """Configure the Nginx daemon using the specified directives context.
 
         Args:
-            context (dict): The directives context to be used in the template.
+            custom_context (dict): The directives context to be used in the template.
         """
+        context_formatter = {
+            "main": ConfigurationContext(MAIN_CONTEXT_DEFAULTS, custom_context.get("main", {})),
+            "events": ConfigurationContext(
+                EVENTS_CONTEXT_DEFAULTS, custom_context.get("events", {})
+            ),
+            "http": ConfigurationContext(HTTP_CONTEXT_DEFAULTS, custom_context.get("http", {})),
+        }
+
+        jinja_context = {}
+        for key, current in context_formatter.items():
+            jinja_context[key] = {
+                "defaults": current.defaults,
+                "extra": current.extra,
+            }
         new_config_path = NGINX_CONF_PATH.parent / (NGINX_CONF_PATH.name + ".new")
         self._render_template(
             template_file=TEMPLATES_PATH / "nginx.conf",
             dest=new_config_path,
-            context=context,
+            context=jinja_context,
         )
         self._verify_nginx_config(new_config_path)
         shutil.copy(new_config_path, NGINX_CONF_PATH)
