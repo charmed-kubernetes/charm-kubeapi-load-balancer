@@ -3,9 +3,8 @@
 import logging
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
 
 import charms.operator_libs_linux.v0.apt as apt
 import ops
@@ -37,7 +36,12 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class ConfigurationContext:
-    """A class to represent a context with a set of default and custom configurations."""
+    """A class to represent a context with a set of default and custom configurations.
+
+    Attributes:
+        charm_default (dict): The default context configuration dictionary.
+        custom (dict): The custom context configuration which can override the default configuration.
+    """
 
     charm_default: dict
     custom: dict
@@ -61,7 +65,7 @@ class ConfigurationContext:
         Returns:
             dict: The dictionary of extra configurations.
         """
-        return {k:v for k,v in self.user_config.items() if k not in self.charm_default}
+        return {k: v for k, v in self.custom.items() if k not in self.charm_default}
 
 
 class NginxConfigurer(Object):
@@ -97,9 +101,12 @@ class NginxConfigurer(Object):
         """
         context_formatter = {
             "main": ConfigurationContext(MAIN_CONTEXT_DEFAULTS, custom_context.get("main", {})),
-            "events": ConfigurationContext(EVENTS_CONTEXT_DEFAULTS), custom_context.get("events", {})),
+            "events": ConfigurationContext(
+                EVENTS_CONTEXT_DEFAULTS, custom_context.get("events", {})
+            ),
             "http": ConfigurationContext(HTTP_CONTEXT_DEFAULTS, custom_context.get("http", {})),
         }
+
         jinja_context = {}
         for key, current in context_formatter.items():
             jinja_context[key] = {
@@ -110,7 +117,7 @@ class NginxConfigurer(Object):
         self._render_template(
             template_file=TEMPLATES_PATH / "nginx.conf",
             dest=new_config_path,
-            context=context,
+            context=jinja_context,
         )
         self._verify_nginx_config(new_config_path)
         shutil.copy(new_config_path, NGINX_CONF_PATH)
