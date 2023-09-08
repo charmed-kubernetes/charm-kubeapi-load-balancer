@@ -56,8 +56,8 @@ options:
       of /etc/nginx/nginx.conf. Provide a valid block of YAML. For instance:
 
       ```yaml
-        worker_rlimit_nofile: 1024
-        worker_processes: "auto"
+        client_max_body_size: 3m
+        connection_pool_size: 256
       ```
 
       The directives specified here modify how Nginx handles HTTP or HTTPS connections. For
