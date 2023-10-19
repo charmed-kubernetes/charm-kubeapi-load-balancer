@@ -131,10 +131,6 @@ class HACluster(Object):
         if name in desired_services:
             del desired_services[name]
 
-    def update_dns(self):
-        """Remove the existing DNS records associated with the unit."""
-        self.interface.remove_dnsha(self._unit_name, "public")
-
     def update_vips(self):
         """Update the Virtual IP addresses for the HACluster relation."""
         original_vips = self.state.vips

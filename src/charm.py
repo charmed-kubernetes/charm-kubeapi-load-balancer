@@ -112,7 +112,6 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         if self.hacluster.is_ready:
             status.add(MaintenanceStatus("Configuring HACluster"))
             self.hacluster.update_vips()
-            self.hacluster.update_dns()
             self.hacluster.configure_hacluster()
             self.hacluster.add_service("nginx", "nginx")
         else:

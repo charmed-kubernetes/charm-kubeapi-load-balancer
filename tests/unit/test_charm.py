@@ -42,7 +42,6 @@ class TestCharm(unittest.TestCase):
             mock_hacluster.is_ready = True
             self.charm._configure_hacluster()
             mock_hacluster.update_vips.assert_called_once()
-            mock_hacluster.update_dns.assert_called_once()
             mock_hacluster.configure_hacluster.assert_called_once()
             mock_hacluster.add_service.assert_called_once_with("nginx", "nginx")
 
