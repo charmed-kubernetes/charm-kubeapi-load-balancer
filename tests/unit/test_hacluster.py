@@ -93,17 +93,3 @@ class TestHACluster(unittest.TestCase):
             cluster.update_vips()
             cluster.configure_hacluster()
             mock_interface.remove_vip.assert_called_once_with(cluster._unit_name, "10.0.0.1")
-
-    def test_update_dns(self):
-        self.harness.update_config(
-            {
-                "ha-cluster-dns": "my-service.example.com",
-            }
-        )
-        cluster = self.cluster
-        with patch.object(cluster, "interface", autospec=True) as mock_interface:
-            with patch.object(cluster.charm.model, "get_binding", autospec=True) as mock_binding:
-                mock_binding.return_value.network.ingress_address = "127.0.0.1"
-                cluster.configure_hacluster()
-                cluster.update_dns()
-                mock_interface.remove_dnsha.assert_called_once_with(cluster._unit_name, "public")

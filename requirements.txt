@@ -7,4 +7,3 @@ charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-li
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
 ops.interface_tls_certificates @ git+https://github.com/juju-solutions/interface-tls-certificates#subdirectory=ops
 interface_hacluster @ git+https://github.com/openstack/charm-interface-hacluster
-
