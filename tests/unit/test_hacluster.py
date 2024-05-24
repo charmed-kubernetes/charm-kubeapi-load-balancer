@@ -12,6 +12,7 @@ class TestHACluster(unittest.TestCase):
         self.harness = Harness(CharmKubeApiLoadBalancer)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
+        self.harness.disable_hooks()
         self.cluster = self.harness.charm.hacluster
 
     def test_add_service(self):
