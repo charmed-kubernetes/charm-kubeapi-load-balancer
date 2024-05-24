@@ -224,6 +224,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         )
         return result.strip()
 
+    @status.on_error(status.WaitingStatus("Waiting to restart Nginx"))
     def _install_load_balancer(self):
         """Install and configure the load balancer."""
         status.add(MaintenanceStatus("Installing Load Balancer"))

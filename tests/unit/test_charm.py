@@ -20,6 +20,7 @@ class TestCharm(unittest.TestCase):
         self.harness = ops.testing.Harness(CharmKubeApiLoadBalancer)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
+        self.harness.disable_hooks()
         self.charm = self.harness.charm
         self.mock_nginx = mock_nginx
 
