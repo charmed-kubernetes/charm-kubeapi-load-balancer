@@ -3,7 +3,7 @@ toml
 loadbalancer-interface
 pydantic==1.*
 cosl == 0.0.5
-charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
-charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
-ops.interface_tls_certificates @ git+https://github.com/juju-solutions/interface-tls-certificates#subdirectory=ops
-interface_hacluster @ git+https://github.com/openstack/charm-interface-hacluster
+charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@release_1.30
+charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@release_1.30
+ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@release_1.30#subdirectory=ops
+interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@release_1.30
