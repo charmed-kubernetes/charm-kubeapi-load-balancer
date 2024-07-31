@@ -85,8 +85,10 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """Change the owner of a file.
 
         Args:
+        ----
             file_path (Path): The path to the file whose owner needs to be changed.
             user_name (str): The name of the user to set as the new owner.
+
         """
         user = pwd.getpwnam(user_name)
         uid, gid = user.pw_uid, user.pw_gid
@@ -95,8 +97,10 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
     def _check_certificates(self, event):
         """Check the certificates relation status and updates the status accordingly.
 
-        Returns:
+        Returns
+        -------
             True if certificates relation is ready, False otherwise.
+
         """
         evaluation = self.certificates.evaluate_relation(event)
         if evaluation:
@@ -146,8 +150,10 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """Configure NGINX with the server dictionary.
 
         Args:
+        ----
             servers (Dict[int, Set]): A dictionary where the keys are server ports (int) and the values
             are sets containing tuples of backends and their corresponding backend ports.
+
         """
         self.nginx.configure_site(
             "apilb",
@@ -162,9 +168,11 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
     def _create_server_dict(self) -> Dict[int, Set]:
         """Create a dictionary of servers and their backends.
 
-        Returns:
+        Returns
+        -------
             Dict[int, Set]: A dictionary where the keys are server ports (int) and the values
             are sets containing tuples of backends and their corresponding backend ports.
+
         """
         servers = {}
         for request in self.load_balancer.all_requests:
@@ -177,11 +185,14 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """Retrieve a list of bind addresses for the current unit.
 
         Args:
+        ----
             ipv4 (bool): Whether to include IPv4 addresses (default is True).
             ipv6 (bool): Whether to include IPv6 addresses (default is True).
 
         Returns:
+        -------
             List[str]: A list of bind addresses available on the unit.
+
         """
         result = subprocess.check_output(
             ["ip", "-j", "-br", "addr", "show", "scope", "global"],
@@ -284,7 +295,9 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """Open ports on the unit and close the unwanted ones.
 
         Args:
+        ----
             ports (Set[int]): A set of integers representing the server ports to be opened.
+
         """
         opened_ports = {port.port for port in self.unit.opened_ports()}
         open_ports = ports - opened_ports
