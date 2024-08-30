@@ -2,9 +2,9 @@ charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-li
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@main
 ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@main#subdirectory=ops
 interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@main
-cosl == 0.0.7
+cosl == 0.0.26
 loadbalancer_interface == 1.2.0
-ops == 2.12.0
-pydantic == 1.10.15
+ops == 2.16.0
+pydantic == 1.10.18
 tenacity == 9.0.0
 toml == 0.10.2
