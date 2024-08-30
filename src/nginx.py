@@ -38,9 +38,11 @@ log = logging.getLogger(__name__)
 class ConfigurationContext:
     """A class to represent a context with a set of default and custom configurations.
 
-    Attributes:
+    Attributes
+    ----------
         charm_default (dict): The default context configuration dictionary.
         custom (dict): The custom context configuration which can override the default configuration.
+
     """
 
     charm_default: dict
@@ -53,8 +55,10 @@ class ConfigurationContext:
         If a configuration is present in both, the custom configuration overrides
         the default.
 
-        Returns:
+        Returns
+        -------
             dict: The merged defaults dictionary.
+
         """
         return {k: self.custom.get(k, v) for k, v in self.charm_default.items()}
 
@@ -62,8 +66,10 @@ class ConfigurationContext:
     def extra(self) -> dict:
         """Returns the configurations that are exclusively in the custom configuration.
 
-        Returns:
+        Returns
+        -------
             dict: The dictionary of extra configurations.
+
         """
         return {k: v for k, v in self.custom.items() if k not in self.charm_default}
 
@@ -97,7 +103,9 @@ class NginxConfigurer(Object):
         """Configure the Nginx daemon using the specified directives context.
 
         Args:
+        ----
             custom_context (dict): The directives context to be used in the template.
+
         """
         context_formatter = {
             "main": ConfigurationContext(MAIN_CONTEXT_DEFAULTS, custom_context.get("main", {})),
@@ -126,9 +134,11 @@ class NginxConfigurer(Object):
         """Configure an Nginx site using the specified template and context.
 
         Args:
+        ----
             site (str): The name of the site to be configured.
             template (Path): The path to the template file for the Nginx site configuration.
             **kwargs (dict): Additional context variables to be used in the template.
+
         """
         self.charm.unit.status = MaintenanceStatus(f"Configuring site {site}")
 
@@ -155,10 +165,13 @@ class NginxConfigurer(Object):
         check using the `nginx` CLI tool.
 
         Args:
+        ----
             config_path (Path): The path to the Nginx configuration file to be verified.
 
         Raises:
+        ------
             CalledProcessError: If the `nginx` command returns a non-zero exit code.
+
         """
         cmd = ["nginx", "-t", "-c", str(config_path)]
         subprocess.check_output(cmd)
