@@ -1,9 +1,10 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from ops.testing import Harness
+
 from charm import CharmKubeApiLoadBalancer
 from hacluster import HAClusterConfigMismatchError
-from ops.testing import Harness
 
 
 class TestHACluster(unittest.TestCase):

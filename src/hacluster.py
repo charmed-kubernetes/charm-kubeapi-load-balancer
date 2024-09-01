@@ -74,8 +74,10 @@ class HACluster(Object):
         """Add a service to the desired services in the HA cluster.
 
         Args:
+        ----
             name (str): The key name of the service.
             service_name (str): The name of the service to be added.
+
         """
         current_services = self.state.current_services
         if name not in current_services:
@@ -102,8 +104,10 @@ class HACluster(Object):
     def is_ready(self):
         """Check if the HACluster integration is ready.
 
-        Returns:
+        Returns
+        -------
             bool: True if the HACluster relation is ready, False otherwise.
+
         """
         if self.relation and self.relation.units:
             return True
@@ -118,8 +122,10 @@ class HACluster(Object):
         """Remove a service from the desired services in the HA cluster.
 
         Args:
+        ----
             name (str): The key name of the service.
             service_name (str): The name of the service to be removed.
+
         """
         current_services = self.state.current_services
         deleted_services = self.state.deleted_services
