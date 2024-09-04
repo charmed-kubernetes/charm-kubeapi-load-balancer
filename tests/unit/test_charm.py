@@ -50,6 +50,7 @@ class TestCharm(unittest.TestCase):
     def test_configure_nginx_sites(self):
         servers = {80: {("backend1", 8080), ("backend2", 8081)}}
         self.harness.update_config({"proxy_read_timeout": 10})
+        self.harness.update_config({"x-stream-protocol-version": "channel.k8s.io"})
         self.charm._configure_nginx_sites(servers)
         assert self.mock_nginx.return_value.configure_site.mock_calls == [
             call(
@@ -59,6 +60,7 @@ class TestCharm(unittest.TestCase):
                 server_certificate="/srv/kubernetes/server.crt",
                 server_key="/srv/kubernetes/server.key",
                 proxy_read_timeout=10,
+                x_stream_protocol_version="channel.k8s.io",
             ),
             call(
                 "metrics",
