@@ -77,3 +77,12 @@ options:
       A space-separated list of virtual IPs that the charm can utilize in conjunction with the
       HA Cluster subordinate charm. This option is mutually exclusive with the `ha-cluster-dns`
       option.
+  x-stream-protocol-version:
+    type: string
+    default: ""
+    destription: |
+       This option specifies the value of the X-Stream-Protocol-Version header.
+       Since nginx cannot merge multiple X-Stream-Protocol-Version headers,
+       this setting allows for manual specification to ensure proper transmission to the backend.
+       The format should follow the RFC9110 specification, i.e., a comma separated list of the header
+       values. https://datatracker.ietf.org/doc/html/rfc9110#name-field-lines-and-combined-fi

@@ -73,6 +73,51 @@ def _ensure_service_stopped(service_name: str):
         assert not service_running(service_name)
 
 
+def _parse_x_stream_protocol_version(config_str):
+    """
+    Parse the x-stream-protocol-version configuration string.
+
+    Parameters:
+    - config_str (str): The configuration string for x-stream-protocol-version.
+
+    Returns:
+    - str: A comma-separated string of valid protocol versions.
+
+    Raises:
+    - ValueError: If any of the specified protocol versions are invalid.
+
+    Behavior:
+    - If config_str is empty, returns empty
+    - If valid values are provided, splits on space, verifies each element,
+      and applies to the header with ", ".join(valid_x_protocol_versions).
+    - If any invalid value, raises a ValueError.
+    """
+    allowed_versions = [
+        "v5.channel.k8s.io",
+        "v4.channel.k8s.io",
+        "v3.channel.k8s.io",
+        "v2.channel.k8s.io",
+        "channel.k8s.io",
+    ]
+
+    if not config_str.strip():
+        return ""
+
+    valid_versions = []
+    invalid_versions = []
+
+    for version in map(str.strip, config_str.split(",")):
+        if version in allowed_versions:
+            valid_versions.append(version)
+        else:
+            invalid_versions.append(version)
+
+    if invalid_versions:
+        raise ValueError(f"Invalid protocol versions: {', '.join(invalid_versions)}")
+
+    return ",".join(valid_versions)
+
+
 class CharmKubeApiLoadBalancer(ops.CharmBase):
     """Charm the service."""
 
@@ -176,6 +221,20 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             are sets containing tuples of backends and their corresponding backend ports.
 
         """
+        try:
+            x_stream_protocol_version = _parse_x_stream_protocol_version(
+                self.config.get("x-stream-protocol-version")
+            )
+            if x_stream_protocol_version:
+                log.info(f"x-stream-protocol-version: {x_stream_protocol_version}")
+            else:
+                log.info("x-stream-protocol-version is empty.")
+        except ValueError as e:
+            msg = f"Error: {str(e)}"
+            log.exception(msg)
+            status.add(BlockedStatus(msg))
+            return
+
         self.nginx.configure_site(
             "apilb",
             TEMPLATES_PATH / "apilb.conf",
@@ -183,6 +242,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             server_certificate=str(SERVER_CRT_PATH),
             server_key=str(SERVER_KEY_PATH),
             proxy_read_timeout=self.config.get("proxy_read_timeout"),
+            x_stream_protocol_version=x_stream_protocol_version,
         )
         self.nginx.configure_site("metrics", TEMPLATES_PATH / "metrics.conf")
 
