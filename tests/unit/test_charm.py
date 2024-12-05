@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 import ops
 import ops.testing
 
-from charm import CharmKubeApiLoadBalancer
+from charm import CharmKubeApiLoadBalancer, LBRequestsChanged
 
 
 class TestCharm(unittest.TestCase):
@@ -271,11 +271,12 @@ class TestCharm(unittest.TestCase):
             mock_lb_addresses = ["10.1.1.1", "10.1.1.2"]
             mock_event = MagicMock()
             mock_get_lb_addresses.return_value = mock_lb_addresses
-            mock_load_balancer.new_requests = [mock_request]
+            mock_load_balancer.all_requests = [mock_request]
+            mock_request.public = True
 
             self.charm._provide_lbs(mock_event)
 
-            mock_request.response.address = mock_lb_addresses[0]
+            assert mock_request.response.address == mock_lb_addresses[0]
             mock_load_balancer.send_response.assert_called_once_with(mock_request)
 
     @patch("charm.CharmKubeApiLoadBalancer._get_lb_addresses")
@@ -283,40 +284,62 @@ class TestCharm(unittest.TestCase):
         with patch.object(self.charm, "load_balancer") as mock_load_balancer:
             mock_request = MagicMock()
             mock_event = MagicMock()
-            mock_request.protocol = "unsupported"
+            mock_request.protocol = "udp"
             mock_lb_addresses = ["10.1.1.1", "10.1.1.2"]
-            mock_load_balancer.new_requests = [mock_request]
+            mock_load_balancer.all_requests = [mock_request]
             mock_get_lb_addresses.return_value = mock_lb_addresses
+            mock_request.public = True
 
             self.charm._provide_lbs(mock_event)
 
-            mock_request.response.error_type = mock_request.response.error_types.unsupported
+            assert (
+                mock_request.response.error_type == mock_request.response.error_types.unsupported
+            )
             mock_request.response.error_fields = {
                 "protocol": "Protocol must be one of: tcp, http, https"
             }
             mock_load_balancer.send_response.assert_called_once_with(mock_request)
 
     @patch("charm.CharmKubeApiLoadBalancer._get_lb_addresses")
-    def test_provide_lbs_with_no_lb_addresses(self, mock_get_lb_addresses):
+    @patch("charm.CharmKubeApiLoadBalancer._get_public_address")
+    def test_provide_lbs_with_no_lb_addresses(self, mock_public_address, mock_get_lb_addresses):
         with patch.object(self.charm, "load_balancer") as mock_load_balancer, patch.object(
             self.charm.model, "get_binding"
         ) as mock_binding:
             mock_request = MagicMock()
             mock_request.protocol = "tcp"
-            mock_load_balancer.new_requests = [mock_request]
+            mock_load_balancer.all_requests = [mock_request]
             mock_get_lb_addresses.return_value = []
+            mock_public_address.return_value = "192.168.0.1"
             mock_network = MagicMock()
             mock_network.network.bind_address = "10.1.1.3"
             mock_network.network.ingress_address = "10.1.1.4"
             mock_binding.return_value = mock_network
+            mock_request.public = True
 
             self.charm._provide_lbs(MagicMock())
 
-            mock_request.response.address = mock_network.network.bind_address
+            assert mock_request.response.address == mock_public_address.return_value
             mock_load_balancer.send_response.assert_called_once_with(mock_request)
 
     @patch("charm.CharmKubeApiLoadBalancer._get_lb_addresses")
     def test_provide_lbs_with_public_request(self, mock_get_lb_addresses):
+        with patch.object(self.charm, "load_balancer") as mock_load_balancer:
+            mock_request = MagicMock()
+            mock_request.protocol = "tcp"
+            mock_load_balancer.all_requests = [mock_request]
+            mock_get_lb_addresses.return_value = []
+            mock_lb_addresses = ["10.1.1.1", "10.1.1.2"]
+            mock_get_lb_addresses.return_value = mock_lb_addresses
+            mock_request.public = True
+
+            self.charm._provide_lbs(MagicMock())
+
+            assert mock_request.response.address == mock_lb_addresses[0]
+            mock_load_balancer.send_response.assert_called_once_with(mock_request)
+
+    @patch("charm.CharmKubeApiLoadBalancer._get_lb_addresses")
+    def test_provide_lbs_with_private_request_new_requests(self, mock_get_lb_addresses):
         with patch.object(self.charm, "load_balancer") as mock_load_balancer:
             mock_request = MagicMock()
             mock_request.protocol = "tcp"
@@ -325,6 +348,9 @@ class TestCharm(unittest.TestCase):
             mock_lb_addresses = ["10.1.1.1", "10.1.1.2"]
             mock_get_lb_addresses.return_value = mock_lb_addresses
 
-            mock_request.public = True
+            mock_request.public = False
 
-            self.charm._provide_lbs(None)
+            self.charm._provide_lbs(MagicMock(spec=LBRequestsChanged))
+
+            assert mock_request.response.address == mock_lb_addresses[0]
+            mock_load_balancer.send_response.assert_called_once_with(mock_request)
