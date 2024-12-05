@@ -34,6 +34,7 @@ from charms.operator_libs_linux.v1.systemd import (
 from charms.reconciler import Reconciler
 from loadbalancer_interface import LBConsumers
 from loadbalancer_interface.provides import LBRequestsChanged
+from loadbalancer_interface.schemas.v1 import Protocols
 from ops.interface_tls_certificates import CertificatesRequires
 from ops.model import Binding, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from yaml import YAMLError
@@ -342,9 +343,9 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         for request in requests:
             response = request.response
             if request.protocol not in (
-                request.protocols.tcp,
-                request.protocols.http,
-                request.protocols.https,
+                Protocols.tcp.value,
+                Protocols.http.value,
+                Protocols.https.value,
             ):
                 response.error_type = response.error_types.unsupported
                 response.error_fields = {"protocol": "Protocol must be one of: tcp, http, https"}
