@@ -33,6 +33,7 @@ from charms.operator_libs_linux.v1.systemd import (
 )
 from charms.reconciler import Reconciler
 from loadbalancer_interface import LBConsumers
+from loadbalancer_interface.provides import LBRequestsChanged
 from ops.interface_tls_certificates import CertificatesRequires
 from ops.model import Binding, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from yaml import YAMLError
@@ -330,11 +331,15 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         for port in close_ports:
             self.unit.close_port(protocol="tcp", port=port)
 
-    def _provide_lbs(self, _):
+    def _provide_lbs(self, event: ops.EventBase):
         """Provide load balancer addresses to the requests based on their protocol and address type."""
         lb_addresses = self._get_lb_addresses()
+        if isinstance(event, LBRequestsChanged):
+            requests = self.load_balancer.new_requests
+        else:
+            requests = self.load_balancer.all_requests
 
-        for request in self.load_balancer.new_requests:
+        for request in requests:
             response = request.response
             if request.protocol not in (
                 request.protocols.tcp,
@@ -366,6 +371,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         self._install_exporter()
         self._configure_hacluster()
         self._set_nginx_version()
+        self._provide_lbs(event)
 
     def _request_server_certificates(self, event):
         """Request the certificates to the CA authority."""
