@@ -56,6 +56,16 @@ async def test_build_and_deploy(ops_test):
 
     await ops_test.model.wait_for_idle(status="active", timeout=60 * 60)
 
+    cmd = f"juju remove-relation -m {model} kubeapi-load-balancer:certificates easyrsa:client"
+    retcode, stdout, stderr = await ops_test.run(*shlex.split(cmd))
+    if retcode != 0:
+        log.error(f"retcode: {retcode}")
+        log.error(f"stdout:\n{stdout.strip()}")
+        log.error(f"stderr:\n{stderr.strip()}")
+        pytest.fail("Failed to remove certificates relation to test the streams config")
+
+    await ops_test.model.wait_for_idle(status="active", timeout=5 * 60)
+
 
 async def test_load_balancer_forced_address(ops_test):
     """Validate that the first forced address is passed in lb-consumers relation."""
