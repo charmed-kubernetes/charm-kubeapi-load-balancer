@@ -13,7 +13,13 @@ from ops.framework import Object
 from ops.model import MaintenanceStatus
 
 PACKAGE = "nginx-full"
-NGINX_CONF_PATH = Path("/etc/nginx/nginx.conf")
+NGINX_PATH = Path("/etc/nginx")
+NGINX_CONF_PATH = NGINX_PATH / "nginx.conf"
+NGINX_SITESAVAILABLE_PATH = NGINX_PATH / "sites-available"
+NGINX_SITESENABLED_PATH = NGINX_PATH / "sites-enabled"
+NGINX_STREAMSAVAILABLE_PATH = NGINX_PATH / "streams-available"
+NGINX_STREAMSENABLED_PATH = NGINX_PATH / "streams-enabled"
+
 TEMPLATES_PATH = Path.cwd() / "templates"
 
 MAIN_CONTEXT_DEFAULTS = {"worker_processes": "auto", "user": "www-data", "pid": "/run/nginx.pid"}
@@ -142,15 +148,37 @@ class NginxConfigurer(Object):
         """
         self.charm.unit.status = MaintenanceStatus(f"Configuring site {site}")
 
-        conf_path = Path(f"/etc/nginx/sites-available/{site}")
+        conf_path = NGINX_SITESAVAILABLE_PATH / f"{site}"
         if conf_path.exists():
             conf_path.unlink()
         self._render_template(template_file=template, dest=conf_path, context=kwargs)
-        symlink_path = Path(f"/etc/nginx/sites-enabled/{site}")
+        symlink_path = NGINX_SITESENABLED_PATH / f"{site}"
         if symlink_path.exists():
             symlink_path.unlink()
         symlink_path.symlink_to(conf_path)
         log.info(f"Site {site} updated. Saved vhost config to nginx config paths.")
+
+    def configure_stream(self, stream, template, **kwargs):
+        """Configure an Nginx stream using the specified template and context.
+
+        Args:
+        ----
+            stream (str): The name of the stream to be configured.
+            template (Path): The path to the template file for the Nginx stream configuration.
+            **kwargs (dict): Additional context variables to be used in the template.
+
+        """
+        self.charm.unit.status = MaintenanceStatus(f"Configuring stream {stream}")
+
+        conf_path = NGINX_STREAMSAVAILABLE_PATH / f"{stream}"
+        if conf_path.exists():
+            conf_path.unlink()
+        self._render_template(template_file=template, dest=conf_path, context=kwargs)
+        symlink_path = NGINX_STREAMSENABLED_PATH / f"{stream}"
+        if symlink_path.exists():
+            symlink_path.unlink()
+        symlink_path.symlink_to(conf_path)
+        log.info(f"Stream {stream} updated. Saved stream config to nginx config paths.")
 
     def remove_default_site(self):
         """Remove the default Nginx site configuration if it exists."""
