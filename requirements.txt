@@ -1,7 +1,7 @@
-charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@main
-charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@main
 ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@main#subdirectory=ops
 interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@main
+charms.reconciler == 0.0.0
+charms.contextual-status == 0.0.0
 cosl == 0.0.26
 loadbalancer_interface == 1.2.0
 ops == 2.16.0
