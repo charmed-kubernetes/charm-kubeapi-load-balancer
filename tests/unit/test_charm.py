@@ -66,6 +66,19 @@ class TestCharm(unittest.TestCase):
             ),
         ]
 
+    def test_configure_nginx_streams(self):
+        servers = {80: {("backend1", 8080), ("backend2", 8081)}}
+        self.harness.update_config({"proxy_read_timeout": 10})
+        self.charm._configure_nginx_streams(servers)
+        assert self.mock_nginx.return_value.configure_stream.mock_calls == [
+            call(
+                "apilb",
+                Path.cwd() / "templates" / "apilb-stream.conf",
+                servers=servers,
+                proxy_read_timeout=10,
+            ),
+        ]
+
     def test__create_server_dict(self):
         mock_request1 = MagicMock()
         mock_request1.port_mapping = {80: 8080, 443: 8443}
