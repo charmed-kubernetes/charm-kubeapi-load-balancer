@@ -37,7 +37,7 @@ ignore = ["E501", "D107"]
 extend-exclude = ["__pycache__", "*.egg_info"]
 per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
 
-[lint.mccabe]
+[tool.lint.mccabe]
 max-complexity = 10
 
 [tool.codespell]

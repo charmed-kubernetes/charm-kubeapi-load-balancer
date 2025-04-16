@@ -22,6 +22,7 @@ from typing import Dict, List, Set
 
 import charms.contextual_status as status
 import ops
+import tenacity
 import yaml
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.operator_libs_linux.v1.systemd import (
@@ -31,12 +32,15 @@ from charms.operator_libs_linux.v1.systemd import (
     service_stop,
 )
 from charms.reconciler import Reconciler
-from hacluster import HACluster
 from loadbalancer_interface import LBConsumers
-from nginx import NginxConfigurer
+from loadbalancer_interface.provides import LBRequestsChanged
+from loadbalancer_interface.schemas.v1 import Protocols
 from ops.interface_tls_certificates import CertificatesRequires
 from ops.model import Binding, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from yaml import YAMLError
+
+from hacluster import HACluster
+from nginx import NginxConfigurer
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +54,25 @@ SERVER_KEY_PATH = CERT_DIR / "server.key"
 
 NGINX_SERVICE = "nginx"
 EXPORTER = "nginx-prometheus-exporter"
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_delay(10),
+    reraise=True,
+    wait=tenacity.wait_fixed(1),
+    before=tenacity.before_log(log, logging.WARNING),
+)
+def _ensure_service_stopped(service_name: str):
+    """Ensure that the service is stopped.
+
+    Args:
+    ----
+        service_name (str): The name of the service to stop.
+
+    """
+    if service_running(service_name):
+        service_stop(service_name)
+        assert not service_running(service_name)
 
 
 class CharmKubeApiLoadBalancer(ops.CharmBase):
@@ -235,7 +258,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         )
         return result.strip()
 
-    @status.on_error(status.WaitingStatus("Waiting to restart Nginx"))
+    @status.on_error(ops.WaitingStatus("Waiting to restart Nginx"))
     def _install_load_balancer(self):
         """Install and configure the load balancer."""
         status.add(MaintenanceStatus("Installing Load Balancer"))
@@ -256,7 +279,9 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
 
         self._restart_nginx()
 
+    @status.on_error(ops.WaitingStatus("Retrying node-exporter service"))
     def _install_exporter(self) -> bool:
+        status.add(MaintenanceStatus("Installing exporter"))
         resource_name = EXPORTER
         try:
             resource_path = self.model.resources.fetch(resource_name)
@@ -272,8 +297,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             return
         status.add(MaintenanceStatus(f"Unpacking {resource_name}"))
 
-        if service_running(EXPORTER):
-            service_stop(EXPORTER)
+        _ensure_service_stopped(EXPORTER)
 
         install_path = Path("/opt", EXPORTER)
         install_path.mkdir(parents=True, exist_ok=True)
@@ -286,8 +310,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             shutil.copy2(template_path, path)
 
         if not daemon_reload():
-            status.add(BlockedStatus(f"Cannot load service: {resource_name}"))
-            return
+            raise RuntimeError(f"Failed to reload systemd for : {EXPORTER}")
 
         service_restart(EXPORTER)
 
@@ -309,17 +332,24 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         for port in close_ports:
             self.unit.close_port(protocol="tcp", port=port)
 
-    def _provide_lbs(self, _):
+    def _provide_lbs(self, event: ops.EventBase):
         """Provide load balancer addresses to the requests based on their protocol and address type."""
         lb_addresses = self._get_lb_addresses()
+        if isinstance(event, LBRequestsChanged):
+            requests = self.load_balancer.new_requests
+        else:
+            requests = self.load_balancer.all_requests
 
-        for request in self.load_balancer.new_requests:
+        for request in requests:
             response = request.response
-            if request.protocol not in (
-                request.protocols.tcp,
-                request.protocols.http,
-                request.protocols.https,
+            if Protocols(request.protocol) not in (
+                Protocols.tcp,
+                Protocols.http,
+                Protocols.https,
             ):
+                log.error(
+                    "Request from %s wants invalid protocol: %s", request.name, request.protocol
+                )
                 response.error_type = response.error_types.unsupported
                 response.error_fields = {"protocol": "Protocol must be one of: tcp, http, https"}
                 self.load_balancer.send_response(request)
@@ -345,6 +375,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         self._install_exporter()
         self._configure_hacluster()
         self._set_nginx_version()
+        self._provide_lbs(event)
 
     def _request_server_certificates(self, event):
         """Request the certificates to the CA authority."""
