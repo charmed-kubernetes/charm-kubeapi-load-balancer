@@ -9,7 +9,7 @@ description: |
 links:
   contact:
     - Adam Dyess <adam.dyess@canonical.com>
-    - Kevin Monroe <kevin.monroe@caonical.com>
+    - Homayoon Alimohammadi <homayoon.alimohammadi@canonical.com>
     - Mateo Florido <mateo.florido@canonical.com>
   documentation: https://discourse.charmhub.io/t/kubeapi-load-balancer-docs-index/6213
   source: https://github.com/charmed-kubernetes/charm-kubeapi-load-balancer
