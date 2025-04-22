@@ -2,39 +2,73 @@
 # See https://juju.is/docs/sdk/charmcraft-config for guidance.
 
 type: charm
+name: kubeapi-load-balancer
+summary: Nginx Load Balancer
+description: |
+  A round robin Nginx load balancer to distribute traffic for kubernetes apiservers.
+links:
+  contact:
+    - Adam Dyess <adam.dyess@canonical.com>
+    - Homayoon Alimohammadi <homayoon.alimohammadi@canonical.com>
+    - Mateo Florido <mateo.florido@canonical.com>
+  documentation: https://discourse.charmhub.io/t/kubeapi-load-balancer-docs-index/6213
+  source: https://github.com/charmed-kubernetes/charm-kubeapi-load-balancer
+  issues:
+    - https://bugs.launchpad.net/charm-kubeapi-load-balancer
+resources:
+  nginx-prometheus-exporter:
+    type: file
+    filename: nginx-prometheus-exporter.tar.gz
+    description: |-
+      Binary Release of the nginx prometheus exporter
+      https://github.com/nginxinc/nginx-prometheus-exporter/releases
+
+requires:
+  apiserver:
+    interface: http
+  certificates:
+    interface: tls-certificates
+  ha:
+    interface: hacluster
+provides:
+  lb-consumers:
+    interface: loadbalancer
+  cos-agent:
+    interface: cos_agent
+
 bases:
   - build-on:
     - name: ubuntu
-      channel: "20.04"
+      channel: "22.04"
       architectures: ["amd64"]
     run-on:
     - name: ubuntu
-      channel: "20.04"
+      channel: "22.04"
       architectures: ["amd64"]
     - name: ubuntu
-      channel: "22.04"
+      channel: "24.04"
       architectures: ["amd64"]
   - build-on:
     - name: ubuntu
-      channel: "20.04"
+      channel: "22.04"
       architectures: ["arm64"]
     run-on:
     - name: ubuntu
-      channel: "20.04"
+      channel: "22.04"
       architectures: ["arm64"]
     - name: ubuntu
-      channel: "22.04"
+      channel: "24.04"
       architectures: ["arm64"]
   - build-on:
     - name: ubuntu
-      channel: "20.04"
+      channel: "22.04"
       architectures: ["s390x"]
     run-on:
     - name: ubuntu
-      channel: "20.04"
+      channel: "22.04"
       architectures: ["s390x"]
     - name: ubuntu
-      channel: "22.04"
+      channel: "24.04"
       architectures: ["s390x"]
 parts:
   charm:

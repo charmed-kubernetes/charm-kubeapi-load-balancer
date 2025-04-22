@@ -184,9 +184,11 @@ class TestCharm(unittest.TestCase):
             mock_restart_nginx.assert_called_once()
 
     def test_manage_ports(self):
-        with patch.object(self.charm.unit, "opened_ports") as mock_opened, patch.object(
-            self.charm.unit, "open_port"
-        ) as mock_open, patch.object(self.charm.unit, "close_port") as mock_close:
+        with (
+            patch.object(self.charm.unit, "opened_ports") as mock_opened,
+            patch.object(self.charm.unit, "open_port") as mock_open,
+            patch.object(self.charm.unit, "close_port") as mock_close,
+        ):
             mock_opened.return_value = [
                 MagicMock(port=80),
                 MagicMock(port=443),
@@ -303,9 +305,10 @@ class TestCharm(unittest.TestCase):
     @patch("charm.CharmKubeApiLoadBalancer._get_lb_addresses")
     @patch("charm.CharmKubeApiLoadBalancer._get_public_address")
     def test_provide_lbs_with_no_lb_addresses(self, mock_public_address, mock_get_lb_addresses):
-        with patch.object(self.charm, "load_balancer") as mock_load_balancer, patch.object(
-            self.charm.model, "get_binding"
-        ) as mock_binding:
+        with (
+            patch.object(self.charm, "load_balancer") as mock_load_balancer,
+            patch.object(self.charm.model, "get_binding") as mock_binding,
+        ):
             mock_request = MagicMock()
             mock_request.protocol = "tcp"
             mock_load_balancer.all_requests = [mock_request]

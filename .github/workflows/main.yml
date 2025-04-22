@@ -16,13 +16,13 @@ jobs:
     name: Lint Unit
     uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@main
     with:
-      python: "['3.8', '3.10', '3.12']"
-    needs: 
+      python: "['3.10', '3.12']"
+    needs:
       - call-inclusive-naming-check
 
   integration-test:
     name: VSphere Integration Test
-    needs: 
+    needs:
       - lint-unit
     runs-on: self-hosted
     timeout-minutes: 90
@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Read charmcraft version file
         id: charmcraft
-        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT        
+        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
       - name: Setup Python
         uses: actions/setup-python@v5
         with:

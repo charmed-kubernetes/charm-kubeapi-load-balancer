@@ -22,8 +22,9 @@ class TestNginxConfigurer(unittest.TestCase):
         with open("./templates/nginx.conf") as f:
             input = f.read()
 
-        with patch("builtins.open", mock_open(read_data=input)) as mock_write, patch.object(
-            self.nginx, "_verify_nginx_config"
+        with (
+            patch("builtins.open", mock_open(read_data=input)) as mock_write,
+            patch.object(self.nginx, "_verify_nginx_config"),
         ):
             self.nginx.configure_daemon(context)
 
