@@ -72,6 +72,8 @@ bases:
       architectures: ["s390x"]
 parts:
   charm:
+    plugin: charm
+    source: .
     build-packages: [git]
     prime:
       - templates/**
