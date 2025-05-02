@@ -100,6 +100,38 @@ class TestNginxConfigurer(unittest.TestCase):
 
     @patch("nginx.Path.exists", return_value=True)
     @patch("nginx.Path.unlink")
+    @patch("nginx.Path.symlink_to")
+    def test_configure_stream(self, mock_symlink_to, mock_unlink, mock_exists: MagicMock):
+        stream_name = "test-stream"
+        template_file_path = Path("/path/to/template")
+        context = {"key": "value"}
+
+        self.nginx._load_site = MagicMock(return_value={})
+        self.nginx._render_template = MagicMock()
+
+        self.nginx.configure_stream(stream_name, template_file_path, **context)
+
+        mock_exists.assert_has_calls(
+            [
+                call(),
+                call(),
+            ]
+        )
+        mock_unlink.assert_has_calls(
+            [
+                call(),
+                call(),
+            ]
+        )
+        self.nginx._render_template.assert_called_once_with(
+            template_file=template_file_path,
+            dest=Path("/etc/nginx/streams-available/test-stream"),
+            context=context,
+        )
+        mock_symlink_to.assert_called_once_with(Path("/etc/nginx/streams-available/test-stream"))
+
+    @patch("nginx.Path.exists", return_value=True)
+    @patch("nginx.Path.unlink")
     def test_remove_default_site(self, mock_unlink, mock_exists):
         self.nginx.remove_default_site()
 
