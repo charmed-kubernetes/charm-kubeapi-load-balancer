@@ -1,5 +1,5 @@
-ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@main#subdirectory=ops
-interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@main
+ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@release_1.34#subdirectory=ops
+interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@release_1.34
 charms.reconciler == 0.0.1
 charms.contextual-status == 0.0.1
 cosl == 0.0.26
