@@ -18,6 +18,15 @@ options:
       kubeapi-load-balancer charm. The workers will evenly distribute the load by alternating
       between the IP addresses in this list. For example, if you have 2 IPs and 4 workers,
       each IP will be used by 2 workers.
+  nginx-load-balancer-mode:
+    type: string
+    default: "http"
+    description: |
+      Sets the mode of the nginx load balancer.
+      Valid options are:
+        - "http": configure nginx for HTTP(S) load balancing (requires certificates)
+        - "tcp":  configure nginx for TCP/UDP stream load balancing (no certificates required)
+      The default is "http".
   nginx-events-config:
     type: string
     default: ""
@@ -67,7 +76,7 @@ options:
     type: string
     default: ""
     description: |
-      This option specifies the DNS entry to be used in conjunction with the HA Cluster 
+      This option specifies the DNS entry to be used in conjunction with the HA Cluster
       subordinate charm. This option is mutually exclusive with the `ha-cluster-vip`
       option.
   ha-cluster-vip:

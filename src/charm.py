@@ -282,21 +282,31 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """Install and configure the load balancer."""
         status.add(MaintenanceStatus("Installing Load Balancer"))
         servers = self._create_server_dict()
-        if SERVER_CRT_PATH.exists() and SERVER_KEY_PATH.exists():
+        lb_mode = str(self.config.get("nginx-load-balancer-mode") or "").lower()
+        if lb_mode == "http":
+            if any(not p.exists() for p in [SERVER_CRT_PATH, SERVER_KEY_PATH]):
+                msg = "Waiting for certificate"
+                status.add(WaitingStatus(msg))
+                raise status.ReconcilerError(msg)
             log.info("Certificates found, will use HTTPS")
             # Change the owner of the certs.
             self._change_owner(SERVER_CRT_PATH, "www-data")
             self._change_owner(SERVER_KEY_PATH, "www-data")
             self._configure_nginx_sites(servers)
-        else:
-            log.info("Missing certificates, will use TCP Stream passthrough")
+        elif lb_mode == "tcp":
+            log.info("Using use TCP Stream passthrough")
             self._configure_nginx_streams(servers)
+        else:
+            msg = f"Invalid load balancer mode: {lb_mode}"
+            log.error(msg)
+            status.add(BlockedStatus(msg))
+            raise status.ReconcilerError(msg)
+
         if not self.load_balancer.all_requests:
             status.add(WaitingStatus("Load Balancer request not ready"))
             log.info("Skipping due to requests not ready.")
 
-        self._manage_ports(servers.keys())
-
+        self._manage_ports(set(servers.keys()))
         self._restart_nginx()
 
     @status.on_error(ops.WaitingStatus("Retrying node-exporter service"))
@@ -445,9 +455,10 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         cert = self.certificates.server_certs_map.get(common_name)
 
         if not cert:
-            msg = "Certificates not ready"
-            status.add(MaintenanceStatus(msg))
+            msg = "Certificates relation not yet ready"
             log.info(msg)
+            SERVER_CRT_PATH.unlink(missing_ok=True)
+            SERVER_KEY_PATH.unlink(missing_ok=True)
             return
 
         SERVER_CRT_PATH.parent.mkdir(parents=True, exist_ok=True)
