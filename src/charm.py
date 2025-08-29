@@ -40,7 +40,7 @@ from ops.model import Binding, BlockedStatus, MaintenanceStatus, ModelError, Wai
 from yaml import YAMLError
 
 from hacluster import HACluster
-from nginx import NginxConfigurer, NGINX_STREAMSAVAILABLE_PATH, NGINX_STREAMSENABLED_PATH
+from nginx import NginxConfigurer
 
 log = logging.getLogger(__name__)
 
@@ -152,25 +152,26 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         """
         contexts = {}
 
-        NGINX_STREAMSAVAILABLE_PATH.mkdir(parents=True, exist_ok=True)
-        NGINX_STREAMSENABLED_PATH.mkdir(parents=True, exist_ok=True)
-
         try:
             contexts["main"] = yaml.safe_load(self.config.get("nginx-main-config")) or {}
             contexts["events"] = yaml.safe_load(self.config.get("nginx-events-config")) or {}
             contexts["http"] = yaml.safe_load(self.config.get("nginx-http-config")) or {}
-        except YAMLError:
-            log.exception("Encountered juju config parsing error")
-            status.add(BlockedStatus("Failed to configure NGINX context. Check config values."))
-            return
+        except YAMLError as e:
+            msg = "Failed to configure NGINX context. Check config values."
+            log.exception(msg)
+            status.add(BlockedStatus(msg))
+            raise status.ReconcilerError(msg) from e
+
         try:
             self.nginx.configure_daemon(contexts)
             self.nginx.remove_default_site()
             self._write_nginx_logrotate_config()
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
             msg = "Failed to change Nginx.conf"
             log.exception(msg)
             status.add(BlockedStatus(msg))
+            raise status.ReconcilerError(msg) from e
+        self._restart_nginx()
 
     def _configure_nginx_sites(self, servers: Dict[int, Set]):
         """Configure NGINX sites with the server dictionary.
@@ -189,7 +190,6 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             server_key=str(SERVER_KEY_PATH),
             proxy_read_timeout=self.config.get("proxy_read_timeout"),
         )
-        self.nginx.configure_site("metrics", TEMPLATES_PATH / "metrics.conf")
 
     def _configure_nginx_streams(self, servers: Dict[int, Set]):
         """Configure NGINX streams with the server dictionary.
@@ -302,12 +302,12 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             status.add(BlockedStatus(msg))
             raise status.ReconcilerError(msg)
 
-        if not self.load_balancer.all_requests:
+        if not servers:
             status.add(WaitingStatus("Load Balancer request not ready"))
             log.info("Skipping due to requests not ready.")
 
+        self.nginx.configure_site("metrics", TEMPLATES_PATH / "metrics.conf")
         self._manage_ports(set(servers.keys()))
-        self._restart_nginx()
 
     @status.on_error(ops.WaitingStatus("Retrying node-exporter service"))
     def _install_exporter(self) -> bool:
@@ -317,14 +317,14 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             resource_path = self.model.resources.fetch(resource_name)
         except ModelError:
             status.add(BlockedStatus(f"Error claiming {resource_name}"))
-            return False
+            raise
         except NameError:
             status.add(BlockedStatus(f"Resource {resource_name} not found"))
-            return
+            raise
         filesize = resource_path.stat().st_size
         if filesize < 1000000:
             status.add(BlockedStatus(f"Incomplete resource: {resource_name}"))
-            return
+            raise RuntimeError(f"Resource {resource_name} too small: {filesize} bytes")
         status.add(MaintenanceStatus(f"Unpacking {resource_name}"))
 
         _ensure_service_stopped(EXPORTER)
@@ -400,8 +400,8 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
     def _reconcile(self, event):
         self._request_server_certificates(event)
         self._write_certificates()
-        self._configure_nginx()
         self._install_load_balancer()
+        self._configure_nginx()
         self._install_exporter()
         self._configure_hacluster()
         self._set_nginx_version()

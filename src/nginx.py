@@ -169,6 +169,8 @@ class NginxConfigurer(Object):
 
         """
         self.charm.unit.status = MaintenanceStatus(f"Configuring stream {stream}")
+        NGINX_STREAMSAVAILABLE_PATH.mkdir(parents=True, exist_ok=True)
+        NGINX_STREAMSENABLED_PATH.mkdir(parents=True, exist_ok=True)
 
         conf_path = NGINX_STREAMSAVAILABLE_PATH / f"{stream}"
         if conf_path.exists():
@@ -182,7 +184,7 @@ class NginxConfigurer(Object):
 
     def remove_default_site(self):
         """Remove the default Nginx site configuration if it exists."""
-        site_path = Path("/etc/nginx/sites-enabled/default")
+        site_path = NGINX_SITESENABLED_PATH / "default"
         if site_path.exists():
             site_path.unlink()
 

@@ -99,9 +99,10 @@ class TestNginxConfigurer(unittest.TestCase):
         mock_symlink_to.assert_called_once_with(Path("/etc/nginx/sites-available/test-site"))
 
     @patch("nginx.Path.exists", return_value=True)
+    @patch("nginx.Path.mkdir")
     @patch("nginx.Path.unlink")
     @patch("nginx.Path.symlink_to")
-    def test_configure_stream(self, mock_symlink_to, mock_unlink, mock_exists: MagicMock):
+    def test_configure_stream(self, mock_symlink_to, mock_unlink, mock_mkdir, mock_exists):
         stream_name = "test-stream"
         template_file_path = Path("/path/to/template")
         context = {"key": "value"}
@@ -110,6 +111,13 @@ class TestNginxConfigurer(unittest.TestCase):
         self.nginx._render_template = MagicMock()
 
         self.nginx.configure_stream(stream_name, template_file_path, **context)
+
+        mock_mkdir.assert_has_calls(
+            [
+                call(parents=True, exist_ok=True),
+                call(parents=True, exist_ok=True),
+            ]
+        )
 
         mock_exists.assert_has_calls(
             [

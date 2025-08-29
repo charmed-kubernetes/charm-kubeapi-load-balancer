@@ -17,12 +17,7 @@ APP_NAME = METADATA["name"]
 
 @pytest.mark.abort_on_fail
 @pytest.mark.skip_if_deployed
-async def test_build_and_deploy(ops_test):
-    charm = next(Path().glob("kubeapi*.charm"), None)
-    if not charm:
-        log.info("Build Charm...")
-        charm = await ops_test.build_charm(".")
-
+async def test_build_and_deploy(ops_test, local_charm_path):
     resource_path = ops_test.tmp_path / "charm-resources"
     resource_path.mkdir()
     resource_build_script = Path("./build-resources.sh").resolve()
@@ -37,9 +32,9 @@ async def test_build_and_deploy(ops_test):
     log.info("Build Bundle...")
     bundle, *overlays = await ops_test.async_render_bundles(
         ops_test.Bundle("kubernetes-core", channel="edge"),
-        Path("tests/data/charm.yaml"),
+        Path("tests/data/cdk.yaml"),
         arch="amd64",
-        charm=charm.resolve(),
+        charm=local_charm_path,
         resource_path=resource_path,
     )
 
@@ -56,20 +51,31 @@ async def test_build_and_deploy(ops_test):
 
     await ops_test.model.wait_for_idle(status="active", timeout=60 * 60)
 
-    cmd = f"juju remove-relation -m {model} kubeapi-load-balancer:certificates easyrsa:client"
-    retcode, stdout, stderr = await ops_test.run(*shlex.split(cmd))
-    if retcode != 0:
-        log.error(f"retcode: {retcode}")
-        log.error(f"stdout:\n{stdout.strip()}")
-        log.error(f"stderr:\n{stderr.strip()}")
-        pytest.fail("Failed to remove certificates relation to test the streams config")
 
-    await ops_test.model.wait_for_idle(status="active", timeout=5 * 60)
+async def test_remove_certificates_relation(ops_test):
+    """Remove the certificates relation to test the streams config."""
+
+    cmd = f"juju {{}} -m {ops_test.model_full_name} {APP_NAME}:certificates easyrsa:client"
+    try:
+        retcode, stdout, stderr = await ops_test.run(*shlex.split(cmd.format("remove-relation")))
+        if retcode != 0:
+            log.error(f"retcode: {retcode}")
+            log.error(f"stdout:\n{stdout.strip()}")
+            log.error(f"stderr:\n{stderr.strip()}")
+            pytest.fail("Failed to remove certificates relation")
+        await ops_test.model.wait_for_idle(apps=[APP_NAME], status="waiting", timeout=5 * 60)
+    finally:
+        retcode, stdout, stderr = await ops_test.run(*shlex.split(cmd.format("integrate")))
+        if retcode != 0:
+            log.error(f"retcode: {retcode}")
+            log.error(f"stdout:\n{stdout.strip()}")
+            log.error(f"stderr:\n{stderr.strip()}")
+            pytest.fail("Failed to integrate certificates relation")
 
 
 async def test_load_balancer_forced_address(ops_test):
     """Validate that the first forced address is passed in lb-consumers relation."""
-    api_lb = ops_test.model.applications["kubeapi-load-balancer"]
+    api_lb = ops_test.model.applications[APP_NAME]
     address = api_lb.units[0].data["public-address"]
     await api_lb.set_config({"loadbalancer-ips": address})
     await ops_test.model.wait_for_idle(status="active", timeout=10 * 60)
@@ -86,7 +92,7 @@ async def test_load_balancer_forced_address(ops_test):
 
 async def test_load_balancer_metrics(ops_test):
     """Validate that the node metrics are available."""
-    api_lb = ops_test.model.applications["kubeapi-load-balancer"]
+    api_lb = ops_test.model.applications[APP_NAME]
 
     action = await api_lb.units[0].run("curl http://localhost:8080/status")
     result = await action.wait()
