@@ -302,7 +302,7 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         install_path = Path("/opt", EXPORTER)
         install_path.mkdir(parents=True, exist_ok=True)
         with tarfile.open(resource_path) as tar:
-            tar.extractall(install_path)
+            tar.extractall(install_path, filter="data")
 
         path = Path(f"/etc/systemd/system/{EXPORTER}.service")
         if not path.exists():
