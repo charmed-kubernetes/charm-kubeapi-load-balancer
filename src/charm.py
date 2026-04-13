@@ -130,8 +130,6 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             log.info(f"Certificates evaluation: {evaluation}")
             if "Waiting" in evaluation:
                 status.add(WaitingStatus(evaluation))
-            else:
-                status.add(BlockedStatus(evaluation))
             return False
         return True
 
@@ -150,27 +148,33 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         This method configures main and events contexts with the directives provided
         in the configuration, removes the default NGINX site, and writes the NGINX log
         rotation configuration.
+        Also precreates the NGINX stream directories if they don't exist.
         """
         contexts = {}
+
         try:
             contexts["main"] = yaml.safe_load(self.config.get("nginx-main-config")) or {}
             contexts["events"] = yaml.safe_load(self.config.get("nginx-events-config")) or {}
             contexts["http"] = yaml.safe_load(self.config.get("nginx-http-config")) or {}
-        except YAMLError:
-            log.exception("Encountered juju config parsing error")
-            status.add(BlockedStatus("Failed to configure NGINX context. Check config values."))
-            return
+        except YAMLError as e:
+            msg = "Failed to configure NGINX context. Check config values."
+            log.exception(msg)
+            status.add(BlockedStatus(msg))
+            raise status.ReconcilerError(msg) from e
+
         try:
             self.nginx.configure_daemon(contexts)
             self.nginx.remove_default_site()
             self._write_nginx_logrotate_config()
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
             msg = "Failed to change Nginx.conf"
             log.exception(msg)
             status.add(BlockedStatus(msg))
+            raise status.ReconcilerError(msg) from e
+        self._restart_nginx()
 
     def _configure_nginx_sites(self, servers: Dict[int, Set]):
-        """Configure NGINX with the server dictionary.
+        """Configure NGINX sites with the server dictionary.
 
         Args:
         ----
@@ -186,7 +190,22 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             server_key=str(SERVER_KEY_PATH),
             proxy_read_timeout=self.config.get("proxy_read_timeout"),
         )
-        self.nginx.configure_site("metrics", TEMPLATES_PATH / "metrics.conf")
+
+    def _configure_nginx_streams(self, servers: Dict[int, Set]):
+        """Configure NGINX streams with the server dictionary.
+
+        Args:
+        ----
+            servers (Dict[int, Set]): A dictionary where the keys are server ports (int) and the values
+            are sets containing tuples of backends and their corresponding backend ports.
+
+        """
+        self.nginx.configure_stream(
+            "apilb",
+            TEMPLATES_PATH / "apilb-stream.conf",
+            servers=servers,
+            proxy_read_timeout=self.config.get("proxy_read_timeout"),
+        )
 
     def _create_server_dict(self) -> Dict[int, Set]:
         """Create a dictionary of servers and their backends.
@@ -262,22 +281,33 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
     def _install_load_balancer(self):
         """Install and configure the load balancer."""
         status.add(MaintenanceStatus("Installing Load Balancer"))
-        if not (SERVER_CRT_PATH.exists() and SERVER_KEY_PATH.exists()):
-            log.info("Skipping due to missing certificate.")
-            return False
-        if not self.load_balancer.all_requests:
+        servers = self._create_server_dict()
+        lb_mode = str(self.config.get("nginx-load-balancer-mode") or "").lower()
+        if lb_mode == "http":
+            if any(not p.exists() for p in [SERVER_CRT_PATH, SERVER_KEY_PATH]):
+                msg = "Waiting for certificate"
+                status.add(WaitingStatus(msg))
+                raise status.ReconcilerError(msg)
+            log.info("Certificates found, will use HTTPS")
+            # Change the owner of the certs.
+            self._change_owner(SERVER_CRT_PATH, "www-data")
+            self._change_owner(SERVER_KEY_PATH, "www-data")
+            self._configure_nginx_sites(servers)
+        elif lb_mode == "tcp":
+            log.info("Using use TCP Stream passthrough")
+            self._configure_nginx_streams(servers)
+        else:
+            msg = f"Invalid load balancer mode: {lb_mode}"
+            log.error(msg)
+            status.add(BlockedStatus(msg))
+            raise status.ReconcilerError(msg)
+
+        if not servers:
             status.add(WaitingStatus("Load Balancer request not ready"))
             log.info("Skipping due to requests not ready.")
 
-        # Change the owner of the certs.
-        self._change_owner(SERVER_CRT_PATH, "www-data")
-        self._change_owner(SERVER_KEY_PATH, "www-data")
-
-        servers = self._create_server_dict()
-        self._configure_nginx_sites(servers)
-        self._manage_ports(servers.keys())
-
-        self._restart_nginx()
+        self.nginx.configure_site("metrics", TEMPLATES_PATH / "metrics.conf")
+        self._manage_ports(set(servers.keys()))
 
     @status.on_error(ops.WaitingStatus("Retrying node-exporter service"))
     def _install_exporter(self) -> bool:
@@ -287,14 +317,14 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
             resource_path = self.model.resources.fetch(resource_name)
         except ModelError:
             status.add(BlockedStatus(f"Error claiming {resource_name}"))
-            return False
+            raise
         except NameError:
             status.add(BlockedStatus(f"Resource {resource_name} not found"))
-            return
+            raise
         filesize = resource_path.stat().st_size
         if filesize < 1000000:
             status.add(BlockedStatus(f"Incomplete resource: {resource_name}"))
-            return
+            raise RuntimeError(f"Resource {resource_name} too small: {filesize} bytes")
         status.add(MaintenanceStatus(f"Unpacking {resource_name}"))
 
         _ensure_service_stopped(EXPORTER)
@@ -370,8 +400,8 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
     def _reconcile(self, event):
         self._request_server_certificates(event)
         self._write_certificates()
-        self._configure_nginx()
         self._install_load_balancer()
+        self._configure_nginx()
         self._install_exporter()
         self._configure_hacluster()
         self._set_nginx_version()
@@ -425,9 +455,10 @@ class CharmKubeApiLoadBalancer(ops.CharmBase):
         cert = self.certificates.server_certs_map.get(common_name)
 
         if not cert:
-            msg = "Waiting for certificate"
-            status.add(WaitingStatus(msg))
+            msg = "Certificates relation not yet ready"
             log.info(msg)
+            SERVER_CRT_PATH.unlink(missing_ok=True)
+            SERVER_KEY_PATH.unlink(missing_ok=True)
             return
 
         SERVER_CRT_PATH.parent.mkdir(parents=True, exist_ok=True)

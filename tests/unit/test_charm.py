@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 import ops
 import ops.testing
 
-from charm import CharmKubeApiLoadBalancer, LBRequestsChanged
+from charm import CharmKubeApiLoadBalancer, LBRequestsChanged, TEMPLATES_PATH
 
 
 class TestCharm(unittest.TestCase):
@@ -23,7 +23,7 @@ class TestCharm(unittest.TestCase):
         self.harness.begin()
         self.harness.disable_hooks()
         self.charm = self.harness.charm
-        self.mock_nginx = mock_nginx
+        self.mock_nginx = mock_nginx.return_value
 
     def test__as_address(self):
         self.assertEqual(self.charm._as_address("127.0.0.1"), ipaddress.IPv4Address("127.0.0.1"))
@@ -51,7 +51,7 @@ class TestCharm(unittest.TestCase):
         servers = {80: {("backend1", 8080), ("backend2", 8081)}}
         self.harness.update_config({"proxy_read_timeout": 10})
         self.charm._configure_nginx_sites(servers)
-        assert self.mock_nginx.return_value.configure_site.mock_calls == [
+        assert self.mock_nginx.configure_site.mock_calls == [
             call(
                 "apilb",
                 Path.cwd() / "templates" / "apilb.conf",
@@ -60,9 +60,18 @@ class TestCharm(unittest.TestCase):
                 server_key="/srv/kubernetes/server.key",
                 proxy_read_timeout=10,
             ),
+        ]
+
+    def test_configure_nginx_streams(self):
+        servers = {80: {("backend1", 8080), ("backend2", 8081)}}
+        self.harness.update_config({"proxy_read_timeout": 10})
+        self.charm._configure_nginx_streams(servers)
+        assert self.mock_nginx.configure_stream.mock_calls == [
             call(
-                "metrics",
-                Path.cwd() / "templates" / "metrics.conf",
+                "apilb",
+                Path.cwd() / "templates" / "apilb-stream.conf",
+                servers=servers,
+                proxy_read_timeout=10,
             ),
         ]
 
@@ -147,7 +156,6 @@ class TestCharm(unittest.TestCase):
 
             self.assertEqual(addresses, expected_addresses)
 
-    @patch("charm.CharmKubeApiLoadBalancer._restart_nginx")
     @patch("charm.CharmKubeApiLoadBalancer._manage_ports")
     @patch("charm.CharmKubeApiLoadBalancer._configure_nginx_sites")
     @patch("charm.CharmKubeApiLoadBalancer._create_server_dict")
@@ -160,7 +168,6 @@ class TestCharm(unittest.TestCase):
         mock_create_server_dict,
         mock_configure_nginx_sites,
         mock_manage_ports,
-        mock_restart_nginx,
     ):
         with patch.object(self.charm.load_balancer, "all_requests") as mock_requests:
             mock_requests.return_value = True
@@ -178,10 +185,23 @@ class TestCharm(unittest.TestCase):
                     call(Path("/srv/kubernetes/server.key"), "www-data"),
                 ]
             )
+            self.mock_nginx.configure_site.assert_called_once_with(
+                "metrics", TEMPLATES_PATH / "metrics.conf"
+            )
             mock_create_server_dict.assert_called_once()
             mock_configure_nginx_sites.assert_called_with(mock_servers)
             mock_manage_ports.assert_called_with(mock_servers.keys())
-            mock_restart_nginx.assert_called_once()
+
+    @patch("charm.CharmKubeApiLoadBalancer._write_nginx_logrotate_config")
+    @patch("charm.CharmKubeApiLoadBalancer._restart_nginx")
+    def test_configure_nginx(self, mock_restart_nginx, mock_write_logrotate):
+        self.charm._configure_nginx()
+        mock_write_logrotate.assert_called_once()
+        mock_restart_nginx.assert_called_once()
+        self.mock_nginx.configure_daemon.assert_called_once_with(
+            {"main": {}, "events": {}, "http": {}}
+        )
+        self.mock_nginx.remove_default_site.assert_called_once_with()
 
     def test_manage_ports(self):
         with (
@@ -222,12 +242,15 @@ class TestCharm(unittest.TestCase):
             mock_resource.stat().st_size = 3000000
             self.charm._install_exporter()
 
-        mock_path.assert_has_calls == [
-            call("/opt", "nginx-prometheus-exporter"),
-            call().mkdir(parents=True, exist_ok=True),
-            call("/etc/systemd/system/nginx-prometheus-exporter.service"),
-            call().exists().__bool__(),
-        ]
+        mock_path.assert_has_calls(
+            [
+                call("/opt", "nginx-prometheus-exporter"),
+                call().mkdir(parents=True, exist_ok=True),
+                call("/etc/systemd/system/nginx-prometheus-exporter.service"),
+                call().exists(),
+                call().exists().__bool__(),
+            ]
+        )
         mock_service_stop.assert_called_once_with("nginx-prometheus-exporter")
         mock_daemon_reload.assert_called_once_with()
         mock_service_restart.assert_called_once_with("nginx-prometheus-exporter")
